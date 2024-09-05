@@ -16,7 +16,7 @@
  */
 
 import React, { PureComponent } from "react";
-import { Layout, Menu, Icon } from "antd";
+import { Layout, Menu, Icon, Switch } from "antd";
 import pathToRegexp from "path-to-regexp";
 import { Link } from "dva/router";
 import styles from "./index.less";
@@ -31,7 +31,7 @@ const { SubMenu } = Menu;
 //   icon: 'setting',
 //   icon: 'http://demo.com/icon.png',
 //   icon: <Icon type="setting" />,
-const getIcon = icon => {
+const getIcon = (icon) => {
   if (typeof icon === "string") {
     if (icon.indexOf("http") === 0) {
       return (
@@ -53,7 +53,7 @@ const getIcon = icon => {
  * [{path:string},{path:string}] => [path,path2]
  * @param  menu
  */
-export const getFlatMenuKeys = menu => {
+export const getFlatMenuKeys = (menu) => {
   return menu.reduce((keys, item) => {
     keys.push(item.path);
     if (item.children) {
@@ -72,9 +72,9 @@ export const getMenuMatchKeys = (flatMenuKeys, paths) =>
   paths.reduce(
     (matchKeys, path) =>
       matchKeys.concat(
-        flatMenuKeys.filter(item => pathToRegexp(item).test(path))
+        flatMenuKeys.filter((item) => pathToRegexp(item).test(path)),
       ),
-    []
+    [],
   );
 
 export default class SiderMenu extends PureComponent {
@@ -82,41 +82,47 @@ export default class SiderMenu extends PureComponent {
     super(props);
     this.flatMenuKeys = getFlatMenuKeys(props.menuData);
     this.state = {
-      openKeys: this.getDefaultCollapsedSubMenus(props),
-      localeName: ""
+      openKeys: SiderMenu.getDefaultCollapsedSubMenus(props, this.flatMenuKeys),
+      localeName: "",
+      mode: "inline",
+      theme: "dark",
     };
   }
 
-  componentWillReceiveProps(nextProps) {
-    const { location, menuData } = this.props;
-    this.flatMenuKeys = getFlatMenuKeys(menuData);
-    if (nextProps.location.pathname !== location.pathname) {
-      this.setState({
-        openKeys: this.getDefaultCollapsedSubMenus(nextProps)
-      });
+  static getDerivedStateFromProps(nextProps, prevState) {
+    if (nextProps.location.pathname !== prevState.prevPathname) {
+      return {
+        prevPathname: nextProps.location.pathname,
+        openKeys: SiderMenu.getDefaultCollapsedSubMenus(
+          nextProps,
+          getFlatMenuKeys(nextProps.menuData),
+        ),
+      };
     }
+    // No state update necessary
+    return null;
   }
 
   /**
    * Convert pathname to openKeys
    * /list/search/articles = > ['list','/list/search']
    * @param  props
+   * @param  flatMenuKeys
    */
-  getDefaultCollapsedSubMenus(props) {
+  static getDefaultCollapsedSubMenus(props, flatMenuKeys) {
     const {
-      location: { pathname }
-    } =
-      props || this.props;
-    return getMenuMatchKeys(this.flatMenuKeys, urlToList(pathname));
+      location: { pathname },
+    } = props;
+    return getMenuMatchKeys(flatMenuKeys, urlToList(pathname));
   }
 
-  saveCurrentRoute = route => {
+  saveCurrentRoute = (route) => {
     const { dispatch } = this.props;
     dispatch({
       type: "global/saveCurrentRoutr",
       payload: {
-        currentRouter: route
-      }
+        currentRouter: route,
+      },
     });
   };
 
@@ -125,12 +131,15 @@ export default class SiderMenu extends PureComponent {
    *
    * member of SiderMenu
    */
-  getMenuItemPath = item => {
+  getMenuItemPath = (item) => {
     const itemPath = this.conversionPath(item.path);
     const icon = getIcon(item.icon);
-    const { target, name } = item;
+    let { target, name } = item;
     // Is it a http link
     if (/^https?:\/\//.test(itemPath)) {
+      if (target === undefined) {
+        target = "_blank";
+      }
       return (
         <a href={itemPath} target={target}>
           {icon}
@@ -147,8 +156,8 @@ export default class SiderMenu extends PureComponent {
         onClick={
           isMobile
             ? () => {
-              onCollapse(true);
-            }
+                onCollapse(true);
+              }
             : undefined
         }
       >
@@ -161,8 +170,8 @@ export default class SiderMenu extends PureComponent {
   /**
    * get SubMenu or Item
    */
-  getSubMenuOrItem = item => {
-    if (item.children && item.children.some(child => child.name)) {
+  getSubMenuOrItem = (item) => {
+    if (item.children && item.children.some((child) => child.name)) {
       const childrenItems = this.getNavMenuItems(item.children);
       // The menu is not displayed when there are no submenus
       if (childrenItems && childrenItems.length > 0) {
@@ -202,24 +211,24 @@ export default class SiderMenu extends PureComponent {
   /**
    * Get the menu items
    */
-  getNavMenuItems = menusData => {
+  getNavMenuItems = (menusData) => {
     if (!menusData) {
       return [];
     }
     return menusData
-      .filter(item => item.name && !item.hideInMenu)
-      .map(item => {
+      .filter((item) => item.name && !item.hideInMenu)
+      .map((item) => {
         // make dom
         const ItemDom = this.getSubMenuOrItem(item);
         return this.checkPermissionItem(item.authority, ItemDom);
       })
-      .filter(item => item);
+      .filter((item) => item);
   };
 
   // Get the currently selected menu
   getSelectedMenuKeys = () => {
     const {
-      location: { pathname }
+      location: { pathname },
     } = this.props;
 
     // console.log(this.flatMenuKeys, urlToList(pathname));
@@ -227,7 +236,7 @@ export default class SiderMenu extends PureComponent {
   };
 
   // conversion Path
-  conversionPath = path => {
+  conversionPath = (path) => {
     if (path && path.indexOf("http") === 0) {
       return path;
     } else {
@@ -245,19 +254,25 @@ export default class SiderMenu extends PureComponent {
     return ItemDom;
   };
 
-  isMainMenu = key => {
+  isMainMenu = (key) => {
     const { menuData } = this.props;
     return menuData.some(
-      item => key && (item.key === key || item.path === key)
+      (item) => key && (item.key === key || item.path === key),
     );
   };
 
-  handleOpenChange = openKeys => {
+  handleOpenChange = (openKeys) => {
     const lastOpenKey = openKeys[openKeys.length - 1];
     const moreThanOne =
-      openKeys.filter(openKey => this.isMainMenu(openKey)).length > 1;
+      openKeys.filter((openKey) => this.isMainMenu(openKey)).length > 1;
     this.setState({
-      openKeys: moreThanOne ? [lastOpenKey] : [...openKeys]
+      openKeys: moreThanOne ? [lastOpenKey] : [...openKeys],
+    });
+  };
+
+  changeMode = (value) => {
+    this.setState({
+      mode: value ? "vertical" : "inline",
     });
   };
 
@@ -272,7 +287,7 @@ export default class SiderMenu extends PureComponent {
       if (this.props.menuData[i].locale) {
         this.props.menuData[i].name = getIntlContent(
           this.props.menuData[i].locale,
-          this.props.menuData[i].name
+          this.props.menuData[i].name,
         );
       }
 
@@ -282,7 +297,7 @@ export default class SiderMenu extends PureComponent {
           if (this.props.menuData[i].children[j].locale) {
             this.props.menuData[i].children[j].name = getIntlContent(
               this.props.menuData[i].children[j].locale,
-              this.props.menuData[i].children[j].name
+              this.props.menuData[i].children[j].name,
             );
           }
         }
@@ -290,9 +305,10 @@ export default class SiderMenu extends PureComponent {
     }
   }
 
+  // eslint-disable-next-line react/no-unused-class-component-methods
   changeLocale(locale) {
     this.setState({
-      localeName: locale
+      localeName: locale,
     });
     getCurrentLocale(this.state.localeName);
   }
@@ -305,8 +321,8 @@ export default class SiderMenu extends PureComponent {
     const menuProps = collapsed
       ? {}
       : {
-        openKeys
-      };
+          openKeys,
+        };
     // if pathname can't match, use the nearest parent's key
     let selectedKeys = this.getSelectedMenuKeys();
     if (!selectedKeys.length) {
@@ -328,10 +344,16 @@ export default class SiderMenu extends PureComponent {
             <img className={styles.TitleLogo} src={TitleLogo} alt="logo" />
           </div>
         </Link>
+        <Switch
+          onChange={this.changeMode}
+          checkedChildren="Change Mode"
+          unCheckedChildren="Change Mode"
+          className={styles.changeMode}
+        />
         <Menu
           key="Menu"
-          theme="dark"
-          mode="inline"
+          theme={this.state.theme}
+          mode={this.state.mode}
           {...menuProps}
           onOpenChange={this.handleOpenChange}
           selectedKeys={selectedKeys}

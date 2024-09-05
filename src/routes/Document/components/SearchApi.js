@@ -1,12 +1,12 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,120 +15,304 @@
  * limitations under the License.
  */
 
-import { Tree, Input, Empty } from "antd";
-import React, { useContext, useEffect, useState } from "react";
-import ApiContext from "./ApiContext";
+/* eslint-disable no-unused-expressions */
+
+import {
+  Tree,
+  Empty,
+  message,
+  Typography,
+  Button,
+  Row,
+  Col,
+  Spin,
+  Tooltip,
+} from "antd";
+import React, { useEffect, useImperativeHandle, useState } from "react";
+import { getRootTag, getParentTagId, getApi } from "../../../services/api";
+import { Method } from "./globalData";
+import AddAndUpdateTag from "./AddAndUpdateTag";
+import AddAndUpdateApiDoc from "./AddAndUpdateApiDoc";
 import { getIntlContent } from "../../../utils/IntlUtils";
 
-const { TreeNode } = Tree;
-const { Search } = Input;
+const { Text } = Typography;
 
-function SearchApi(props) {
-  const { onSelect } = props;
+const SearchApi = React.forwardRef((props, ref) => {
+  const { onSelect, afterUpdate } = props;
+  const [loading, setLoading] = useState(false);
+  const [treeData, setTreeData] = useState({});
   const [expandedKeys, setExpandedKeys] = useState([]);
-  const [searchValue, setSearchValue] = useState("");
-  const [autoExpandParent, setAutoExpandParent] = useState(true);
-  const {
-    apiData: { menuProjects }
-  } = useContext(ApiContext);
+  const [selectedKeys, setSelectedKeys] = useState([]);
+  const [document, setDocument] = useState("{}");
+  const [ext, setExt] = useState("{}");
 
-  const renderTreeNode = data => {
-    return data.map(item => {
-      const { children, id, label, key, name } = item;
-      const index = label.indexOf(searchValue);
-      const sameName = name?.indexOf(searchValue);
-      const beforeStr = label.substr(0, index);
-      const afterStr = label.substr(index + searchValue.length);
-      let titleObj = <span>{label}</span>;
-      if (index > -1) {
-        titleObj = (
-          <span>
-            {beforeStr}
-            <span style={{ color: "#f50" }}>{searchValue}</span>
-            {afterStr}
-          </span>
-        );
+  const queryRootTag = async () => {
+    setExpandedKeys([]);
+    setLoading(true);
+    const { code, data = [], message: msg } = await getRootTag();
+    setLoading(false);
+    if (code !== 200) {
+      message.error(msg);
+      return;
+    }
+    const arr =
+      data?.map((item, index) => ({
+        ...item,
+        title: item.name,
+        key: index.toString(),
+        isLeaf: false,
+      })) || [];
+    if (data?.length) {
+      const {
+        code: apiCode,
+        message: apiMsg,
+        data: apiDataRecords,
+      } = await getApi(data[0].id);
+      if (apiCode !== 200) {
+        message.error(apiMsg);
+        return;
       }
-      if (searchValue && sameName > -1) {
-        titleObj = <span style={{ color: "#f50" }}>{label}</span>;
+      const { dataList: apiDataList } = apiDataRecords;
+      data[0].apiDataList = apiDataList;
+      setTreeData(arr);
+      // 默认选中第一个
+      setSelectedKeys(["0"]);
+      onSelect(["0"], { node: { props: arr[0] } });
+    } else {
+      setTreeData(arr);
+      setSelectedKeys([]);
+    }
+  };
+
+  const onExpand = async (keys, { expanded, node }) => {
+    setExpandedKeys(keys);
+    if (expanded === false) {
+      return;
+    }
+    setLoading(true);
+    const { id, hasChildren, eventKey } = node.props;
+    const newTreeData = [...treeData];
+    let showAddTag = true;
+    let resData = [];
+    const eventKeys = eventKey
+      .split("-")
+      .map((v, i, arr) => arr.slice(0, i + 1).join("-"));
+
+    if (hasChildren) {
+      const { code, message: msg, data } = await getParentTagId(id);
+      setLoading(false);
+      if (code !== 200) {
+        message.error(msg);
+        return Promise.reject();
       }
-      return (
-        <TreeNode
-          key={key}
-          title={titleObj}
-          selectable={id !== undefined}
-          id={id}
-        >
-          {children?.length && renderTreeNode(children)}
-        </TreeNode>
-      );
+      resData = data;
+    } else {
+      const { code, message: msg, data } = await getApi(id);
+      setLoading(false);
+      if (code !== 200) {
+        message.error(msg);
+        return Promise.reject();
+      }
+      const { dataList } = data;
+      if (dataList.length) {
+        showAddTag = false;
+      }
+      resData = dataList;
+    }
+    const curNode = eventKeys.reduce((pre, cur, curIndex, curArray) => {
+      const el = pre.find((item) => item.key === cur);
+      if (curIndex === curArray.length - 1) {
+        return el;
+      } else {
+        return el.children || [];
+      }
+    }, newTreeData);
+
+    curNode.children = resData?.map((item, index) => ({
+      ...item,
+      title: hasChildren ? (
+        item.name
+      ) : (
+        <>
+          <Text code>{Method[item.httpMethod]}</Text>
+          <Tooltip placement="topLeft" arrowPointAtCenter title={item.apiPath}>
+            {item.apiPath}
+          </Tooltip>
+        </>
+      ),
+      key: `${eventKey}-${index}`,
+      isLeaf: !hasChildren,
+    }));
+    curNode.children.push({
+      selectable: false,
+      title: (
+        <Row gutter={18}>
+          {showAddTag && (
+            <Col span={12}>
+              <Button
+                type="primary"
+                ghost
+                size="small"
+                onClick={() =>
+                  addOrUpdateTag({
+                    parentTagId: id,
+                  })
+                }
+              >
+                {getIntlContent("SHENYU.DOCUMENT.APIDOC.SEARCH.ADD_MODULE")}
+              </Button>
+            </Col>
+          )}
+
+          <Col span={12}>
+            <Button
+              type="primary"
+              ghost
+              size="small"
+              onClick={() =>
+                addOrUpdateApi({
+                  tagIds: [id],
+                })
+              }
+            >
+              + Api
+            </Button>
+          </Col>
+        </Row>
+      ),
+      key: `${eventKey}-operator`,
+      isLeaf: true,
     });
+    setTreeData(newTreeData);
   };
 
-  const handleSearchChange = e => {
-    const { value } = e.target;
-    const keys = [];
-    const findSearchKeys = data =>
-      data.forEach(item => {
-        if (item.label.indexOf(value) > -1 || item.name?.indexOf(value) > -1) {
-          keys.push(item.key);
-        }
-        if (Array.isArray(item.children)) {
-          findSearchKeys(item.children);
-        }
-      });
-    findSearchKeys(menuProjects);
-    setExpandedKeys(keys);
-    setSearchValue(value);
-    setAutoExpandParent(true);
+  const [openTag, setOpenTag] = useState(false);
+  const [tagForm, setTagForm] = useState({});
+
+  const handleTagCancel = () => {
+    setOpenTag(false);
+    tagForm.resetFields();
   };
 
-  const handleExpandChange = keys => {
-    setExpandedKeys(keys);
-    setAutoExpandParent(false);
+  const handleTagOk = (data) => {
+    handleTagCancel();
+    updateTree(data, "tag");
   };
 
-  useEffect(
-    () => {
-      if (Array.isArray(menuProjects)) {
-        const allKeys = [];
-        const getAllParentsKey = data =>
-          data.forEach(item => {
-            if (item.children) {
-              allKeys.push(item.key);
-              getAllParentsKey(item.children);
-            }
-          });
-        getAllParentsKey(menuProjects);
-        setExpandedKeys(allKeys);
-      }
-    },
-    [menuProjects]
-  );
+  const [openApi, setOpenApi] = useState(false);
+  const [apiForm, setApiForm] = useState({});
+
+  const handleApiCancel = () => {
+    setOpenApi(false);
+    tagForm.resetFields();
+  };
+
+  const handleApiOk = (data) => {
+    handleApiCancel();
+    updateTree(data, "api");
+  };
+
+  const addOrUpdateApi = (data) => {
+    apiForm.resetFields();
+    apiForm.setFieldsValue({
+      ...data,
+    });
+    setDocument(data.document || "{}");
+    setExt(data.ext || "{}");
+    setOpenApi(true);
+  };
+
+  const addOrUpdateTag = (data) => {
+    tagForm.setFieldsValue({
+      ...data,
+    });
+    setOpenTag(true);
+  };
+
+  const updateTree = (data, refType) => {
+    if (!data?.id) {
+      queryRootTag();
+      return;
+    }
+    let allNodes = treeData.flatMap((i) =>
+      i.children ? [...i.children, i] : i,
+    );
+    let curNodeIdx = allNodes.findIndex((t) => t.id && t.id === data.id) ?? -1;
+    if (curNodeIdx === -1) {
+      return;
+    }
+    if (refType === "tag") {
+      allNodes[curNodeIdx].title = data.name;
+    } else if (refType === "api") {
+      allNodes[curNodeIdx].title = (
+        <>
+          <Text code>{Method[data.httpMethod]}</Text>
+          <Tooltip placement="topLeft" arrowPointAtCenter title={data.apiPath}>
+            {data.apiPath}
+          </Tooltip>
+        </>
+      );
+    }
+    // forceUpdate tree
+    setTreeData();
+    setTreeData(treeData);
+    afterUpdate(data, refType);
+  };
+
+  useImperativeHandle(ref, () => ({
+    addOrUpdateApi,
+    addOrUpdateTag,
+    updateTree,
+  }));
+
+  useEffect(() => {
+    queryRootTag();
+  }, []);
 
   return (
-    <div style={{ overflow: "auto" }}>
-      <Search
-        allowClear
-        onChange={handleSearchChange}
-        placeholder={getIntlContent(
-          "SHENYU.DOCUMENT.APIDOC.SEARCH.PLACEHOLDER"
-        )}
-      />
-      {menuProjects?.length ? (
-        <Tree
-          autoExpandParent={autoExpandParent}
-          expandedKeys={expandedKeys}
-          onExpand={handleExpandChange}
-          onSelect={onSelect}
-        >
-          {renderTreeNode(menuProjects)}
-        </Tree>
+    <div>
+      {treeData?.length ? (
+        <Spin spinning={loading}>
+          <Tree
+            onSelect={(keys, e) => {
+              setSelectedKeys(keys);
+              onSelect(keys, e);
+            }}
+            treeData={treeData}
+            onExpand={onExpand}
+            expandedKeys={expandedKeys}
+            selectedKeys={selectedKeys}
+            defaultSelectedKeys={["0"]}
+          />
+        </Spin>
       ) : (
         <Empty style={{ padding: "80px 0" }} description={false} />
       )}
+      <Button
+        block
+        type="dashed"
+        onClick={() => addOrUpdateTag({ parentTagId: "0" })}
+      >
+        {getIntlContent("SHENYU.DOCUMENT.APIDOC.SEARCH.ADD_ROOT_MODULE")}
+      </Button>
+      <AddAndUpdateTag
+        visible={openTag}
+        formLoaded={setTagForm}
+        onOk={handleTagOk}
+        onCancel={handleTagCancel}
+      />
+      <AddAndUpdateApiDoc
+        visible={openApi}
+        document={document}
+        updateDocument={(obj) => setDocument(JSON.stringify(obj.updated_src))}
+        ext={ext}
+        updateExt={(obj) => setExt(JSON.stringify(obj.updated_src))}
+        formLoaded={setApiForm}
+        onOk={handleApiOk}
+        onCancel={handleApiCancel}
+      />
     </div>
   );
-}
+});
 
 export default SearchApi;

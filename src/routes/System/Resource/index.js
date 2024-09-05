@@ -16,20 +16,32 @@
  */
 
 import React, { Component } from "react";
-import { Row, Col, Table, Tree, Button, message, Popconfirm, Icon } from "antd";
+import {
+  Button,
+  Col,
+  Icon,
+  Input,
+  message,
+  Popconfirm,
+  Row,
+  Table,
+  Tree,
+} from "antd";
 import { connect } from "dva";
 import AddModal from "./AddModal";
 import { getIntlContent } from "../../../utils/IntlUtils";
-import AuthButton from '../../../utils/AuthButton';
-import {resetAuthMenuCache} from '../../../utils/AuthRoute';
+import AuthButton from "../../../utils/AuthButton";
+import { resetAuthMenuCache } from "../../../utils/AuthRoute";
+import styles from "./index.less";
 
 const { TreeNode } = Tree;
+const { Search } = Input;
 
 @connect(({ resource, role, global, loading }) => ({
   resource,
   role,
   global,
-  loading: loading.effects["resource/fetchButtons"]
+  loading: loading.effects["resource/fetchButtons"],
 }))
 export default class Resource extends Component {
   constructor(props) {
@@ -39,55 +51,59 @@ export default class Resource extends Component {
       popup: "",
       buttons: [],
       currentMenu: null,
+      menuName: "",
     };
   }
 
-  componentWillMount() {
+  componentDidMount() {
     this.getMenuTree();
   }
 
-  onSelectChange = selectedRowKeys => {
+  onSelectChange = (selectedRowKeys) => {
     this.setState({ selectedRowKeys });
   };
 
   getMenuTree = () => {
     const { dispatch } = this.props;
     dispatch({
-      type: "resource/fetchMenuTree"
+      type: "resource/fetchMenuTree",
     });
   };
 
-  getButtons = (menuId) =>{
+  getButtons = (menuId) => {
     const { dispatch } = this.props;
     dispatch({
       type: "resource/fetchButtons",
-      payload: {id: menuId},
-      callback: (buttons)=>{
+      payload: { id: menuId },
+      callback: (buttons) => {
         this.setState({
-          buttons
-        })
-      }
+          buttons,
+        });
+      },
     });
-  }
+  };
 
   closeModal = () => {
     this.setState({ popup: "" });
   };
 
-  editClick = record => {
-    const { resource: { menuTree }, dispatch } = this.props;
+  editClick = (record) => {
+    const {
+      resource: { menuTree },
+      dispatch,
+    } = this.props;
     dispatch({
       type: "resource/fetchItem",
       payload: {
-        id: record.id
+        id: record.id,
       },
-      callback: resource => {
+      callback: (resource) => {
         this.setState({
           popup: (
             <AddModal
               menuTree={menuTree}
               {...resource}
-              handleOk={values => {
+              handleOk={(values) => {
                 const { icon, sort, parentId, id } = values;
                 dispatch({
                   type: "resource/update",
@@ -95,33 +111,36 @@ export default class Resource extends Component {
                     icon,
                     sort,
                     parentId,
-                    id
+                    id,
                   },
                   callback: () => {
-                    if(resource.resourceType === 2){
+                    if (resource.resourceType === 2) {
                       this.getButtons(resource.parentId);
-                    }else{
+                    } else {
                       this.getMenuTree();
                     }
                     this.closeModal();
                     this.refreshPermission();
-                  }
+                  },
                 });
               }}
               handleCancel={() => {
                 this.closeModal();
               }}
             />
-          )
+          ),
         });
-      }
+      },
     });
-  }
+  };
 
   deleteClick = (resourceType, resourceId) => {
     const { dispatch } = this.props;
     const { selectedRowKeys, currentMenu } = this.state;
-    if (resourceType === 2 && (!selectedRowKeys || selectedRowKeys.length === 0)) {
+    if (
+      resourceType === 2 &&
+      (!selectedRowKeys || selectedRowKeys.length === 0)
+    ) {
       message.destroy();
       message.warn("Please select data");
       return;
@@ -129,26 +148,32 @@ export default class Resource extends Component {
     dispatch({
       type: "resource/delete",
       payload: {
-        list: resourceType ===2 ? selectedRowKeys : [resourceId]
+        list: resourceType === 2 ? selectedRowKeys : [resourceId],
       },
       callback: () => {
-        if(resourceType === 2) {
+        if (resourceType === 2) {
           this.getButtons(currentMenu.id);
           this.setState({ selectedRowKeys: [] });
         } else {
           this.getMenuTree();
           this.setState({
-            buttons: []
-          })
+            buttons: [],
+          });
         }
-      }
+      },
     });
   };
 
+  searchMenu = (menuName) => {
+    this.setState({ menuName });
+  };
+
   addClick = (resourceType) => {
-    const { resource: { menuTree } } = this.props;
-    const { currentMenu }  = this.state;
-    if(resourceType === 2 && !currentMenu){
+    const {
+      resource: { menuTree },
+    } = this.props;
+    const { currentMenu } = this.state;
+    if (resourceType === 2 && !currentMenu) {
       message.warn("请先选择左侧菜单");
       return;
     }
@@ -158,88 +183,120 @@ export default class Resource extends Component {
         <AddModal
           resourceType={resourceType}
           menuTree={menuTree}
-          handleOk={values => {
+          handleOk={(values) => {
             const { dispatch } = this.props;
-            const { icon, sort, title, url, perms, parentId} = values;
+            const { icon, sort, title, url, perms, parentId } = values;
             dispatch({
               type: "resource/add",
               payload: {
                 icon: icon || "",
-                sort : isNaN(sort) ? 0: sort,
+                sort: isNaN(sort) ? 0 : sort,
                 title,
                 url: url || "",
-                parentId: resourceType === 2 ? currentMenu.id : (parentId || ""),
+                parentId: resourceType === 2 ? currentMenu.id : parentId || "",
                 resourceType,
                 name: "",
                 component: "",
                 isLeaf: resourceType === 2,
                 isRoute: 0,
                 perms: perms || "",
-                status: 1
+                status: 1,
               },
               callback: () => {
-                if(resourceType === 2){
+                if (resourceType === 2) {
                   this.getButtons(currentMenu.id);
-                }else{
+                } else {
                   this.getMenuTree();
                 }
                 this.closeModal();
-              }
+              },
             });
           }}
           handleCancel={() => {
             this.closeModal();
           }}
         />
-      )
+      ),
     });
   };
 
   refreshPermission = () => {
     const { dispatch } = this.props;
     dispatch({
-      type: 'global/refreshPermission',
+      type: "global/refreshPermission",
       payload: {
         callback: () => {
           resetAuthMenuCache();
-        }
-      }
+        },
+      },
     });
-  }
+  };
 
   onSelectMenu = (selectedKeys, e) => {
     const currentMenu = e.node.props.dataRef;
-    if(currentMenu.children && currentMenu.children.length > 0){
+    if (currentMenu.children && currentMenu.children.length > 0) {
       this.setState({
         currentMenu,
-        buttons: []
-      })
-    }else {
+        buttons: [],
+      });
+    } else {
       this.getButtons(currentMenu.id);
       this.setState({
-        currentMenu
-      })
+        currentMenu,
+      });
     }
-  }
+  };
+
+  filterTreeNode = (item) => {
+    const { menuName } = this.state;
+    let title = item.title || item.meta.title;
+    if (title.startsWith("SHENYU.")) {
+      title = getIntlContent(item.meta.title);
+    }
+    if (title?.toUpperCase().includes(menuName?.toUpperCase())) {
+      return true;
+    }
+    return item.children?.some(this.filterTreeNode);
+  };
 
   renderTreeNodes = (data) => {
-    data = data.sort((a,b)=>(a.sort||0)-(b.sort||0));
-    return data.map(item => {
+    data = data.sort((a, b) => (a.sort || 0) - (b.sort || 0));
+    return data.filter(this.filterTreeNode).map((item) => {
       const { currentMenu } = this.state;
-      item.title =  item.meta.title;
+      item.title = item.meta.title;
       if (item.title.startsWith("SHENYU.")) {
         item.title = getIntlContent(item.title);
       }
       if (item.children && item.children.length > 0) {
-        if(currentMenu && item.id === currentMenu.id){
+        if (currentMenu && item.id === currentMenu.id) {
           return (
             <TreeNode
               title={
-                <div style={{width:"200px",display:"flex",justifyContent:"space-between"}}>
-                  <span>{item.meta.icon&&<span style={{width:"24px",height:"24px",lineHeight:"24px",margin:"0 5px"}}><Icon type={item.meta.icon} /></span>}{item.title}</span>
+                <div
+                  style={{
+                    width: "200px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <span>
+                    {item.meta.icon && (
+                      <span
+                        style={{
+                          width: "24px",
+                          height: "24px",
+                          lineHeight: "24px",
+                          margin: "0 5px",
+                        }}
+                      >
+                        <Icon type={item.meta.icon} />
+                      </span>
+                    )}
+                    {item.title}
+                  </span>
                   <span>
                     <Icon
-                      onClick={(e)=>{
+                      onClick={(e) => {
                         e.stopPropagation();
                         this.editClick(item);
                       }}
@@ -254,26 +311,58 @@ export default class Resource extends Component {
               {this.renderTreeNodes(item.children)}
             </TreeNode>
           );
-        }else{
+        } else {
           return (
-            <TreeNode title={item.title} icon={item.meta.icon&&<Icon type={item.meta.icon} />} key={item.id} dataRef={item}>
+            <TreeNode
+              title={item.title}
+              icon={item.meta.icon && <Icon type={item.meta.icon} />}
+              key={item.id}
+              dataRef={item}
+            >
               {this.renderTreeNodes(item.children)}
             </TreeNode>
           );
         }
       }
-      if(!currentMenu || item.id !== currentMenu.id){
-        return <TreeNode icon={item.meta.icon&&<Icon type={item.meta.icon} />} title={item.title} key={item.id} dataRef={item} />;
+      if (!currentMenu || item.id !== currentMenu.id) {
+        return (
+          <TreeNode
+            icon={item.meta.icon && <Icon type={item.meta.icon} />}
+            title={item.title}
+            key={item.id}
+            dataRef={item}
+          />
+        );
       } else {
         return (
           <TreeNode
             title={
-              <div style={{width:"200px",display:"flex",justifyContent:"space-between"}}>
-                <span>{item.meta.icon&&<span style={{width:"24px",height:"24px",lineHeight:"24px",margin:"0 5px"}}><Icon type={item.meta.icon} /></span>}{item.title}</span>
+              <div
+                style={{
+                  width: "200px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span>
+                  {item.meta.icon && (
+                    <span
+                      style={{
+                        width: "24px",
+                        height: "24px",
+                        lineHeight: "24px",
+                        margin: "0 5px",
+                      }}
+                    >
+                      <Icon type={item.meta.icon} />
+                    </span>
+                  )}
+                  {item.title}
+                </span>
                 <span>
                   <AuthButton perms="system:resource:editMenu">
                     <Icon
-                      onClick={(e)=>{
+                      onClick={(e) => {
                         e.stopPropagation();
                         this.editClick(item);
                       }}
@@ -284,7 +373,7 @@ export default class Resource extends Component {
                     <AuthButton perms="system:resource:editMenu">
                       <Popconfirm
                         title={getIntlContent("SHENYU.COMMON.DELETE")}
-                        placement='bottom'
+                        placement="bottom"
                         onConfirm={(e) => {
                           e.stopPropagation();
                           this.deleteClick(item.resourceType, item.id);
@@ -293,8 +382,8 @@ export default class Resource extends Component {
                         cancelText={getIntlContent("SHENYU.COMMON.CALCEL")}
                       >
                         <Icon
-                          style={{marginLeft:10}}
-                          onClick={(e)=>{
+                          style={{ marginLeft: 10 }}
+                          onClick={(e) => {
                             e.stopPropagation();
                           }}
                           type="delete"
@@ -311,11 +400,13 @@ export default class Resource extends Component {
         );
       }
     });
-  }
-
+  };
 
   render() {
-    const { resource: { menuTree }, loading } = this.props;
+    const {
+      resource: { menuTree },
+      loading,
+    } = this.props;
     const { selectedRowKeys, buttons, popup } = this.state;
     const buttonColumns = [
       {
@@ -323,11 +414,11 @@ export default class Resource extends Component {
         title: getIntlContent("SHENYU.SYSTEM.BUTTON"),
         dataIndex: "title",
         key: "title",
-        ellipsis:true,
+        ellipsis: true,
         width: 100,
-        render: text => {
-          return  getIntlContent(text) || text;
-        }
+        render: (text) => {
+          return getIntlContent(text) || text;
+        },
       },
       {
         align: "center",
@@ -335,16 +426,16 @@ export default class Resource extends Component {
         dataIndex: "icon",
         key: "icon",
         width: 60,
-        render: text => {
-          return  <Icon type={text} /> || text;
-        }
+        render: (text) => {
+          return <Icon type={text} /> || text;
+        },
       },
       {
         align: "center",
         title: getIntlContent("SHENYU.SYSTEM.RESOURCE.PERMS"),
         dataIndex: "perms",
         key: "perms",
-        ellipsis:true,
+        ellipsis: true,
         width: 140,
       },
       {
@@ -352,25 +443,25 @@ export default class Resource extends Component {
         title: getIntlContent("SHENYU.SYSTEM.CREATETIME"),
         dataIndex: "dateCreated",
         key: "dateCreated",
-        ellipsis:true,
+        ellipsis: true,
         width: 140,
-        sorter: (a,b) => a.dateCreated > b.dateCreated ? 1 : -1,
+        sorter: (a, b) => (a.dateCreated > b.dateCreated ? 1 : -1),
       },
       {
         align: "center",
         title: getIntlContent("SHENYU.SYSTEM.UPDATETIME"),
         dataIndex: "dateUpdated",
         key: "dateUpdated",
-        ellipsis:true,
+        ellipsis: true,
         width: 140,
-        sorter: (a,b) => a.dateUpdated > b.dateUpdated ? 1 : -1,
+        sorter: (a, b) => (a.dateUpdated > b.dateUpdated ? 1 : -1),
       },
       {
         align: "center",
         title: getIntlContent("SHENYU.COMMON.OPERAT"),
         dataIndex: "operate",
         key: "operate",
-        ellipsis:true,
+        ellipsis: true,
         width: 60,
         render: (text, record) => {
           return (
@@ -385,56 +476,69 @@ export default class Resource extends Component {
               </div>
             </AuthButton>
           );
-        }
-      }
+        },
+      },
     ];
 
     const rowSelection = {
       selectedRowKeys,
-      onChange: this.onSelectChange
+      onChange: this.onSelectChange,
     };
 
     return (
       <div className="plug-content-wrap">
         <Row gutter={20}>
-          <Col span={6} style={{minWidth:280}}>
+          <Col span={6} style={{ minWidth: 280 }}>
             <div className="table-header">
               <h3>{getIntlContent("SHENYU.SYSTEM.RESOURCE.MENULIST.TITLE")}</h3>
-              <AuthButton perms="system:resource:addMenu">
-                <Button type="primary" onClick={() => this.addClick(1)}>
-                  {getIntlContent("SHENYU.BUTTON.RESOURCE.MENU.ADD")}
-                </Button>
-              </AuthButton>
+              <div className={styles.headerSearch}>
+                <AuthButton perms="system:resource:list">
+                  <Search
+                    className={styles.search}
+                    style={{ minWidth: "130px" }}
+                    placeholder={getIntlContent(
+                      "SHENYU.SYSTEM.RESOURCE.MENU.INPUT.NAME",
+                    )}
+                    enterButton={getIntlContent("SHENYU.SYSTEM.SEARCH")}
+                    size="default"
+                    onSearch={this.searchMenu}
+                  />
+                </AuthButton>
+                <AuthButton perms="system:resource:addMenu">
+                  <Button type="primary" onClick={() => this.addClick(1)}>
+                    {getIntlContent("SHENYU.BUTTON.RESOURCE.MENU.ADD")}
+                  </Button>
+                </AuthButton>
+              </div>
             </div>
-            {(menuTree && menuTree.length > 0) ? (
+            {menuTree && menuTree.length > 0 ? (
               <Tree
-                style={{background:"white",marginTop: 30}}
+                style={{ background: "white", marginTop: 30 }}
                 defaultExpandAll
                 onSelect={this.onSelectMenu}
                 showIcon
               >
                 {this.renderTreeNodes(menuTree)}
               </Tree>
-          ):null}
+            ) : null}
           </Col>
           <Col span={18}>
             <div className="table-header">
-              <div style={{ display: "flex" }}>
-                <h3 style={{ marginRight: 30 }}>{getIntlContent("SHENYU.SYSTEM.RESOURCE.BUTTONLIST.TITLE")}</h3>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <h3>
+                  {getIntlContent("SHENYU.SYSTEM.RESOURCE.BUTTONLIST.TITLE")}
+                </h3>
                 <AuthButton perms="system:resource:deleteButton">
                   <Popconfirm
                     title={getIntlContent("SHENYU.COMMON.DELETE")}
-                    placement='bottom'
+                    placement="bottom"
                     onConfirm={() => {
-                      this.deleteClick(2)
+                      this.deleteClick(2);
                     }}
                     okText={getIntlContent("SHENYU.COMMON.SURE")}
                     cancelText={getIntlContent("SHENYU.COMMON.CALCEL")}
                   >
-                    <Button
-                      style={{ marginLeft: 20 }}
-                      type="danger"
-                    >
+                    <Button style={{ marginLeft: 20 }} type="danger">
                       {getIntlContent("SHENYU.SYSTEM.DELETEDATA")}
                     </Button>
                   </Popconfirm>
@@ -447,7 +551,7 @@ export default class Resource extends Component {
               </AuthButton>
             </div>
             <Table
-              style={{marginTop: 30}}
+              style={{ marginTop: 30 }}
               size="small"
               bordered
               rowKey="id"

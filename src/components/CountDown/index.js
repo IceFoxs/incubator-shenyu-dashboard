@@ -15,13 +15,44 @@
  * limitations under the License.
  */
 
-import React, { Component } from 'react';
+import React, { Component } from "react";
 
 function fixedZero(val) {
   return val * 1 < 10 ? `0${val}` : val;
 }
 
+function initTime(target) {
+  let lastTime = 0;
+  let targetTime = 0;
+  try {
+    if (Object.prototype.toString.call(target) === "[object Date]") {
+      targetTime = target.getTime();
+    } else {
+      targetTime = new Date(target).getTime();
+    }
+  } catch (e) {
+    throw new Error(`invalid target prop ${e.message}`);
+  }
+
+  lastTime = targetTime - new Date().getTime();
+  return {
+    lastTime: Math.max(lastTime, 0),
+  };
+}
+
 class CountDown extends Component {
+  static getDerivedStateFromProps(nextProps, prevState) {
+    if (nextProps.target !== prevState.target) {
+      const { lastTime } = initTime(nextProps.target);
+      return {
+        lastTime,
+        target: nextProps.target,
+        resetTimer: true,
+      };
+    }
+    return null;
+  }
+
   timer = 0;
 
   interval = 1000;
@@ -29,7 +60,7 @@ class CountDown extends Component {
   constructor(props) {
     super(props);
 
-    const { lastTime } = this.initTime(props);
+    const { lastTime } = initTime(props.target);
 
     this.state = {
       lastTime,
@@ -40,49 +71,24 @@ class CountDown extends Component {
     this.tick();
   }
 
-  componentWillReceiveProps(nextProps) {
-    const { target } = this.props;
-    if (target !== nextProps.target) {
-      clearTimeout(this.timer);
-      const { lastTime } = this.initTime(nextProps);
-      this.setState(
-        {
-          lastTime,
-        },
-        () => {
-          this.tick();
-        }
-      );
+  componentDidUpdate() {
+    if (!this.state.resetTimer) {
+      return;
     }
+    clearTimeout(this.timer);
+    this.tick();
+    // eslint-disable-next-line react/no-did-update-set-state
+    this.setState({ resetTimer: false });
   }
 
   componentWillUnmount() {
     clearTimeout(this.timer);
   }
 
-  initTime = props => {
-    let lastTime = 0;
-    let targetTime = 0;
-    try {
-      if (Object.prototype.toString.call(props.target) === '[object Date]') {
-        targetTime = props.target.getTime();
-      } else {
-        targetTime = new Date(props.target).getTime();
-      }
-    } catch (e) {
-      throw new Error('invalid target prop', e);
-    }
-
-    lastTime = targetTime - new Date().getTime();
-    return {
-      lastTime: lastTime < 0 ? 0 : lastTime,
-    };
-  };
-
   // defaultFormat = time => (
   //  <span>{moment(time).format('hh:mm:ss')}</span>
   // );
-  defaultFormat = time => {
+  defaultFormat = (time) => {
     const hours = 60 * 60 * 1000;
     const minutes = 60 * 1000;
 
@@ -91,17 +97,13 @@ class CountDown extends Component {
     const s = Math.floor((time - h * hours - m * minutes) / 1000);
     return (
       <span>
-        {fixedZero(h)}
-        :
-        {fixedZero(m)}
-        :
-        {fixedZero(s)}
+        {fixedZero(h)}:{fixedZero(m)}:{fixedZero(s)}
       </span>
     );
   };
 
   tick = () => {
-    const { onEnd } = this.props;
+    const { onEnd = () => {} } = this.props;
     let { lastTime } = this.state;
 
     this.timer = setTimeout(() => {
@@ -115,7 +117,7 @@ class CountDown extends Component {
             if (onEnd) {
               onEnd();
             }
-          }
+          },
         );
       } else {
         lastTime -= this.interval;
@@ -125,7 +127,7 @@ class CountDown extends Component {
           },
           () => {
             this.tick();
-          }
+          },
         );
       }
     }, this.interval);

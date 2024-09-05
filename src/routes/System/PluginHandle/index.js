@@ -15,20 +15,29 @@
  * limitations under the License.
  */
 
-import React, {Component} from "react";
-import {Table, Button, Popconfirm, message, Select, Input} from "antd";
-import {connect} from "dva";
-import { resizableComponents } from '../../../utils/resizable';
+import React, { Component } from "react";
+import {
+  Table,
+  Button,
+  Popconfirm,
+  message,
+  Select,
+  Input,
+  Popover,
+  Tag,
+} from "antd";
+import { connect } from "dva";
+import { resizableComponents } from "../../../utils/resizable";
 import AddModal from "./AddModal";
 import { getCurrentLocale, getIntlContent } from "../../../utils/IntlUtils";
-import AuthButton from '../../../utils/AuthButton';
+import AuthButton from "../../../utils/AuthButton";
 
 const { Option } = Select;
 
-@connect(({pluginHandle, loading, global}) => ({
+@connect(({ pluginHandle, loading, global }) => ({
   pluginHandle,
   language: global.language,
-  loading: loading.effects["pluginHandle/fetch"]
+  loading: loading.effects["pluginHandle/fetch"],
 }))
 export default class PluginHandle extends Component {
   components = resizableComponents;
@@ -41,21 +50,24 @@ export default class PluginHandle extends Component {
       selectedRowKeys: [],
       pluginDict: [],
       popup: "",
-      pluginId:'',
-      field: '',
-      localeName: window.sessionStorage.getItem('locale') ? window.sessionStorage.getItem('locale') : 'en-US',
+      pluginId: "",
+      field: "",
+      localeName: window.sessionStorage.getItem("locale")
+        ? window.sessionStorage.getItem("locale")
+        : "en-US",
+      columns: [],
     };
   }
 
-  componentWillMount = async () => {
+  async componentDidMount() {
     await this.loadPluginDict();
 
     this.initPluginColumns();
 
-    this.query()
+    this.query();
   }
 
-  componentDidUpdate = async () => {
+  async componentDidUpdate() {
     const { language } = this.props;
     const { localeName } = this.state;
     if (language !== localeName) {
@@ -69,16 +81,16 @@ export default class PluginHandle extends Component {
    * condition query page list
    */
   query = () => {
-    const {dispatch} = this.props;
-    const {pluginId, field, currentPage, pageSize} = this.state;
+    const { dispatch } = this.props;
+    const { pluginId, field, currentPage, pageSize } = this.state;
     dispatch({
       type: "pluginHandle/fetch",
       payload: {
         pluginId,
         field,
         currentPage,
-        pageSize
-      }
+        pageSize,
+      },
     });
   };
 
@@ -86,19 +98,19 @@ export default class PluginHandle extends Component {
    * load plugin drop dict
    */
   loadPluginDict = async () => {
-    const {dispatch} = this.props;
+    const { dispatch } = this.props;
     await dispatch({
       type: "pluginHandle/fetchPluginList",
     });
-    this.setState({pluginDict: this.props.pluginHandle.pluginDropDownList})
+    this.setState({ pluginDict: this.props.pluginHandle.pluginDropDownList });
   };
 
-  pageOnchange = page => {
-    this.setState({ currentPage: page },this.query);
+  pageOnchange = (page) => {
+    this.setState({ currentPage: page }, this.query);
   };
 
-  onShowSizeChange = (currentPage,pageSize) => {
-    this.setState({ currentPage: 1,pageSize }, this.query);
+  onShowSizeChange = (currentPage, pageSize) => {
+    this.setState({ currentPage: 1, pageSize }, this.query);
   };
 
   /**
@@ -106,107 +118,136 @@ export default class PluginHandle extends Component {
    * @param reset after is reset search condition
    */
   closeModal = (reset = false) => {
-    this.setState(reset ? { popup: "" ,currentPage: 1, pluginId: '',field: ''} : {popup: ""},this.query);
+    this.setState(
+      reset
+        ? { popup: "", currentPage: 1, pluginId: "", field: "" }
+        : { popup: "" },
+      this.query,
+    );
   };
 
-  searchOnchange = e => {
-    this.setState({ pluginId: e, currentPage: 1}, this.query);
+  searchOnchange = (e) => {
+    this.setState({ pluginId: e, currentPage: 1 }, this.query);
   };
 
-  fieldOnchange = e => {
-    this.setState({ field: e.target.value, currentPage: 1}, this.query);
+  fieldOnchange = (e) => {
+    this.setState({ field: e.target.value, currentPage: 1 }, this.query);
   };
 
   searchClick = () => {
-    this.setState({ currentPage: 1}, this.query);
+    this.setState({ currentPage: 1 }, this.query);
   };
 
-  editClick = record => {
+  editClick = (record, copy) => {
     const { dispatch } = this.props;
-    const { currentPage,pageSize } = this.state;
-    this.loadPluginDict()
-    const pluginDropDownList = this.state.pluginDict
+    const { currentPage, pageSize } = this.state;
+    this.loadPluginDict();
+    const pluginDropDownList = this.state.pluginDict;
     dispatch({
       type: "pluginHandle/fetchItem",
       payload: {
-        id: record.id
+        id: record.id,
       },
-      callback: pluginHandle => {
-        let obj = JSON.parse(pluginHandle.extObj)
-        Object.assign(
-          pluginHandle,
-          obj
-        )
+      callback: (pluginHandle) => {
+        let obj = JSON.parse(pluginHandle.extObj);
+        Object.assign(pluginHandle, obj);
         this.setState({
           popup: (
             <AddModal
               pluginDropDownList={pluginDropDownList}
               disabled={true}
               {...pluginHandle}
-              handleOk={values => {
-                const { field, label, id, pluginId,dataType,type,sort,required,defaultValue,placeholder,rule } = values;
-                let extObj
-                if(required || defaultValue || placeholder || rule){
-                  extObj=JSON.stringify({
-                    'required':required,
-                    'defaultValue':defaultValue,
-                    'placeholder':placeholder,
-                    'rule':rule || ""
-                  })
-                }
-                dispatch({
-                  type: "pluginHandle/update",
-                  payload: {
-                    field,
-                    label,
-                    id,
-                    pluginId,
-                    dataType,
-                    type,
-                    sort,
+              handleOk={(values) => {
+                const {
+                  field,
+                  label,
+                  id,
+                  pluginId,
+                  dataType,
+                  type,
+                  sort,
+                  required,
+                  defaultValue,
+                  placeholder,
+                  rule,
+                } = values;
+                let extObj;
+                if (required || defaultValue || placeholder || rule) {
+                  extObj = JSON.stringify({
+                    required,
                     defaultValue,
                     placeholder,
-                    rule,
-                    extObj
-                  },
+                    rule: rule || "",
+                  });
+                }
+                let payload = {
+                  field,
+                  label,
+                  id,
+                  pluginId,
+                  dataType,
+                  type,
+                  sort,
+                  defaultValue,
+                  placeholder,
+                  rule,
+                  extObj,
+                };
+                if (copy) {
+                  delete payload.id;
+                }
+                dispatch({
+                  type: `pluginHandle/${copy ? "add" : "update"}`,
+                  payload,
                   fetchValue: {
                     currentPage,
-                    pageSize
+                    pageSize,
                   },
                   callback: () => {
                     this.closeModal(true);
-                  }
+                  },
                 });
               }}
               handleCancel={() => {
                 this.closeModal();
               }}
             />
-          )
+          ),
         });
-      }
+      },
     });
   };
 
   addClick = () => {
-    const {currentPage,pageSize} = this.state;
-    this.loadPluginDict()
-    const pluginDropDownList = this.state.pluginDict
+    const { currentPage, pageSize } = this.state;
+    this.loadPluginDict();
+    const pluginDropDownList = this.state.pluginDict;
     this.setState({
       popup: (
         <AddModal
           pluginDropDownList={pluginDropDownList}
-          handleOk={values => {
-            const {dispatch} = this.props;
-            const {pluginId, label, field, dataType,type,sort,required,defaultValue,placeholder,rule} = values;
-            let extObj
-            if(required || defaultValue || placeholder || rule){
-              extObj=JSON.stringify({
-                'required':required,
-                'defaultValue':defaultValue,
-                'placeholder':placeholder,
-                'rule': rule || ""
-              })
+          handleOk={(values) => {
+            const { dispatch } = this.props;
+            const {
+              pluginId,
+              label,
+              field,
+              dataType,
+              type,
+              sort,
+              required,
+              defaultValue,
+              placeholder,
+              rule,
+            } = values;
+            let extObj;
+            if (required || defaultValue || placeholder || rule) {
+              extObj = JSON.stringify({
+                required,
+                defaultValue,
+                placeholder,
+                rule: rule || "",
+              });
             }
             dispatch({
               type: "pluginHandle/add",
@@ -220,26 +261,26 @@ export default class PluginHandle extends Component {
                 defaultValue,
                 placeholder,
                 rule,
-                extObj
+                extObj,
               },
               fetchValue: {
                 currentPage,
-                pageSize
+                pageSize,
               },
               callback: () => {
                 this.closeModal(true);
-              }
+              },
             });
           }}
           handleCancel={() => {
             this.closeModal();
           }}
         />
-      )
+      ),
     });
   };
 
-  onSelectChange = selectedRowKeys => {
+  onSelectChange = (selectedRowKeys) => {
     this.setState({ selectedRowKeys });
   };
 
@@ -250,15 +291,15 @@ export default class PluginHandle extends Component {
       dispatch({
         type: "pluginHandle/delete",
         payload: {
-          list: selectedRowKeys
+          list: selectedRowKeys,
         },
         fetchValue: {
           currentPage,
-          pageSize
+          pageSize,
         },
         callback: () => {
-          this.setState({ selectedRowKeys: [],currentPage:1 },this.query);
-        }
+          this.setState({ selectedRowKeys: [], currentPage: 1 }, this.query);
+        },
       });
     } else {
       message.destroy();
@@ -266,20 +307,22 @@ export default class PluginHandle extends Component {
     }
   };
 
-  handleResize = index => (e, { size }) => {
-    this.setState(({ columns }) => {
-      const nextColumns = [...columns];
-      nextColumns[index] = {
-        ...nextColumns[index],
-        width: size.width,
-      };
-      return { columns: nextColumns };
-    });
-  };
+  handleResize =
+    (index) =>
+    (e, { size }) => {
+      this.setState(({ columns }) => {
+        const nextColumns = [...columns];
+        nextColumns[index] = {
+          ...nextColumns[index],
+          width: size.width,
+        };
+        return { columns: nextColumns };
+      });
+    };
 
-  changeLocale(locale){
+  changeLocale(locale) {
     this.setState({
-      localeName:locale
+      localeName: locale,
     });
     getCurrentLocale(this.state.localeName);
   }
@@ -293,37 +336,76 @@ export default class PluginHandle extends Component {
           dataIndex: "pluginId",
           key: "pluginId",
           ellipsis: true,
-          sorter: (a,b)=> a.pluginId - b.pluginId,
-          width: 120,
-          render: text => {
-            const {pluginHandle} = this.props;
-            const {pluginHandleList} = pluginHandle;
+          sorter: (a, b) => a.pluginId - b.pluginId,
+          width: 140,
+          render: (text) => {
+            const { pluginHandle } = this.props;
+            const { pluginHandleList } = pluginHandle;
             const pluginDropDownList = this.state.pluginDict;
             if (pluginHandleList) {
-              pluginHandleList.forEach(item => {
+              pluginHandleList.forEach((item) => {
                 if (item.extObj) {
-                  let obj = JSON.parse(item.extObj)
+                  let obj = {};
+                  try {
+                    obj = JSON.parse(item.extObj);
+                  } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.error(e);
+                  }
                   if (obj.required) {
-                    item.required = obj.required
+                    item.required = obj.required;
                   }
                   if (obj.defaultValue) {
-                    item.defaultValue = obj.defaultValue
+                    item.defaultValue = obj.defaultValue;
                   }
                   if (obj.placeholder) {
-                    item.placeholder = obj.placeholder
+                    item.placeholder = obj.placeholder;
                   }
                 }
-              })
+              });
             }
             if (pluginDropDownList) {
-              let arr = pluginDropDownList.filter(item => item.id === text)
+              let arr = pluginDropDownList.filter((item) => item.id === text);
               if (arr && arr.length > 0) {
-                return <div>{arr[0].name}</div>
+                return (
+                  <div style={{ color: "#260033", fontWeight: "bold" }}>
+                    {arr[0].name}
+                  </div>
+                );
               } else {
-                return <div>text</div>
+                return <div>text</div>;
               }
             }
-          }
+          },
+        },
+        {
+          align: "center",
+          title: getIntlContent("SHENYU.PLUGIN.FIELDTYPE"),
+          dataIndex: "type",
+          key: "type",
+          ellipsis: true,
+          width: 120,
+          sorter: (a, b) => a.type - b.type,
+          render: (text) => {
+            if (text === 1) {
+              return (
+                <Tag color="cyan">{getIntlContent("SHENYU.SELECTOR.NAME")}</Tag>
+              );
+            } else if (text === 2) {
+              return (
+                <Tag color="purple">
+                  {getIntlContent("SHENYU.PLUGIN.RULES")}
+                </Tag>
+              );
+            } else if (text === 3) {
+              return <Tag color="blue">{getIntlContent("SHENYU.PLUGIN")}</Tag>;
+            }
+            return (
+              <Tag color="red">
+                {getIntlContent("SHENYU.PLUGIN.UNDEFINETYPE")}
+              </Tag>
+            );
+          },
         },
         {
           align: "center",
@@ -331,81 +413,58 @@ export default class PluginHandle extends Component {
           dataIndex: "field",
           key: "field",
           ellipsis: true,
-          width: 200,
+          // width: 200,
+          render: (text, record) => {
+            let content = (
+              <div>
+                <p>{record.label}</p>
+                <p>
+                  {getIntlContent("SHENYU.SYSTEM.CREATETIME")}:
+                  {record.dateCreated}
+                </p>
+                <p>
+                  {getIntlContent("SHENYU.SYSTEM.UPDATETIME")}:
+                  {record.dateUpdated}
+                </p>
+              </div>
+            );
+            return (
+              <Popover
+                placement="topLeft"
+                content={content}
+                title={getIntlContent("SHENYU.PLUGIN.LABEL")}
+              >
+                <div style={{ color: "#1f640a" }}>{text || "----"}</div>
+              </Popover>
+            );
+          },
         },
         {
           align: "center",
-          title: getIntlContent("SHENYU.PLUGIN.LABEL"),
-          dataIndex: "label",
-          key: "label",
+          title: getIntlContent("SHENYU.PLUGIN.REQUIRED"),
+          dataIndex: "required",
+          key: "required",
           ellipsis: true,
-          width: 200,
-          sorter: (a,b) => a.label > b.label ? 1 : -1,
-        },
-        {
-          align: "center",
-          title: getIntlContent("SHENYU.PLUGIN.DATATYPE"),
-          dataIndex: "dataType",
-          key: "dataType",
-          ellipsis: true,
-          width: 100,
-          render: text => {
-            if (text === 1) {
-              return <div>{getIntlContent("SHENYU.PLUGIN.DIGITAL")}</div>;
-            } else if (text === 2) {
-              return <div>{getIntlContent("SHENYU.PLUGIN.STRING")}</div>;
-            } else if (text === 3) {
-              return <div>{getIntlContent("SHENYU.PLUGIN.DROPDOWN")}</div>;
+          width: 120,
+          sorter: (a, b) =>
+            (a.required || "0") > (b.required || "0") ? 1 : -1,
+          render: (text) => {
+            if (text === "1") {
+              return (
+                <span style={{ color: "green", fontWeight: "bold" }}>
+                  {getIntlContent("SHENYU.COMMON.YES")}
+                </span>
+              );
+            } else {
+              return (
+                <span style={{ color: "red", fontWeight: "bold" }}>
+                  {getIntlContent("SHENYU.COMMON.NO")}
+                </span>
+              );
             }
-            return <div>{getIntlContent("SHENYU.PLUGIN.UNDEFINETYPE")}</div>;
-          }
-      },
-      {
-        align: "center",
-        title: getIntlContent("SHENYU.PLUGIN.FIELDTYPE"),
-        dataIndex: "type",
-        key: "type",
-        ellipsis:true,
-        width: 120,
-        sorter: (a,b)=> a.type - b.type,
-        render: text => {
-          if (text === 1) {
-            return <div>{getIntlContent("SHENYU.SELECTOR.NAME")}</div>;
-          } else if (text === 2) {
-            return <div>{getIntlContent("SHENYU.PLUGIN.RULES")}</div>;
-          } else if (text === 3) {
-            return <div>{getIntlContent("SHENYU.PLUGIN")}</div>;
-          }
-          return <div>{getIntlContent("SHENYU.PLUGIN.UNDEFINETYPE")}</div>;
-        }
-      },
-      {
-        align: "center",
-        title: getIntlContent("SHENYU.PLUGIN.SORT"),
-        dataIndex: "sort",
-        key: "sort",
-        ellipsis:true,
-        width: 80,
-        sorter: (a,b)=> a.sort - b.sort,
-      },
-      {
-        align: "center",
-        title: getIntlContent("SHENYU.PLUGIN.REQUIRED"),
-        dataIndex: "required",
-        key: "required",
-        ellipsis:true,
-        width: 120,
-        sorter: (a,b) => (a.required || "-1") > (b.required || "-1") ? 1 : -1,
-        render: text => {
-          if (text === "1") {
-            return <div>{getIntlContent("SHENYU.COMMON.YES")}</div>;
-          } else if (text === "0") {
-            return <div>{getIntlContent("SHENYU.COMMON.NO")}</div>;
-          }
-          return <div>{getIntlContent("SHENYU.PLUGIN.UNDEFINETYPE")}</div>;
-        }
-       },
-       {
+          },
+        },
+        {
           align: "center",
           title: getIntlContent("SHENYU.PLUGIN.DEFAULTVALUE"),
           dataIndex: "defaultValue",
@@ -415,20 +474,47 @@ export default class PluginHandle extends Component {
         },
         {
           align: "center",
-          title: getIntlContent("SHENYU.SYSTEM.CREATETIME"),
-          dataIndex: "dateCreated",
-          key: "dateCreated",
+          title: getIntlContent("SHENYU.PLUGIN.DATATYPE"),
+          dataIndex: "dataType",
+          key: "dataType",
           ellipsis: true,
-          width: 180,
-          sorter: (a,b) => a.dateCreated > b.dateCreated ? 1 : -1,
+          width: 100,
+          render: (text) => {
+            if (text === 1) {
+              return (
+                <Tag color="green">
+                  {getIntlContent("SHENYU.PLUGIN.DIGITAL")}
+                </Tag>
+              );
+            } else if (text === 2) {
+              return (
+                <Tag color="orange">
+                  {getIntlContent("SHENYU.PLUGIN.STRING")}
+                </Tag>
+              );
+            } else if (text === 3) {
+              return (
+                <Tag color="magenta">
+                  {getIntlContent("SHENYU.PLUGIN.DROPDOWN")}
+                </Tag>
+              );
+            }
+            return (
+              <Tag color="red">
+                {getIntlContent("SHENYU.PLUGIN.UNDEFINETYPE")}
+              </Tag>
+            );
+          },
         },
+
         {
           align: "center",
-          title: getIntlContent("SHENYU.SYSTEM.UPDATETIME"),
-          dataIndex: "dateUpdated",
-          key: "dateUpdated",
+          title: getIntlContent("SHENYU.PLUGIN.SORT"),
+          dataIndex: "sort",
+          key: "sort",
           ellipsis: true,
-          sorter: (a,b) => a.dateUpdated > b.dateUpdated ? 1 : -1,
+          width: 80,
+          sorter: (a, b) => a.sort - b.sort,
         },
         {
           align: "center",
@@ -436,37 +522,56 @@ export default class PluginHandle extends Component {
           dataIndex: "time",
           key: "time",
           ellipsis: true,
-          fixed: 'right',
+          fixed: "right",
           width: 100,
           render: (text, record) => {
             return (
-              <AuthButton perms="system:pluginHandler:edit">
-                <div
-                  className="edit"
-                  onClick={() => {
-                    this.editClick(record);
-                  }}
-                >
-                  {getIntlContent("SHENYU.SYSTEM.EDITOR")}
-                </div>
-              </AuthButton>
+              <div className="optionParts">
+                <AuthButton perms="system:pluginHandler:edit">
+                  <div
+                    className="edit"
+                    onClick={() => {
+                      this.editClick(record);
+                    }}
+                  >
+                    {getIntlContent("SHENYU.SYSTEM.EDITOR")}
+                  </div>
+                </AuthButton>
+                <AuthButton perms="system:pluginHandler:add">
+                  <div
+                    className="edit"
+                    onClick={() => {
+                      this.editClick(record, true);
+                    }}
+                  >
+                    {getIntlContent("SHENYU.COMMON.COPY")}
+                  </div>
+                </AuthButton>
+              </div>
             );
-          }
-        }
-      ]
-    })
+          },
+        },
+      ],
+    });
   }
 
   render() {
-    const {pluginHandle, loading} = this.props;
-    const {pluginHandleList, total} = pluginHandle;
-    const pluginDropDownList = this.state.pluginDict
-    const {currentPage, pageSize, selectedRowKeys, pluginId, field, popup, columns = []} = this.state;
-
+    const { pluginHandle, loading } = this.props;
+    const { pluginHandleList, total } = pluginHandle;
+    const pluginDropDownList = this.state.pluginDict;
+    const {
+      currentPage,
+      pageSize,
+      selectedRowKeys,
+      pluginId,
+      field,
+      popup,
+      columns = [],
+    } = this.state;
 
     const tableColumns = columns.map((col, index) => ({
       ...col,
-      onHeaderCell: column => ({
+      onHeaderCell: (column) => ({
         width: column.width,
         onResize: this.handleResize(index),
       }),
@@ -474,28 +579,36 @@ export default class PluginHandle extends Component {
 
     const rowSelection = {
       selectedRowKeys,
-      onChange: this.onSelectChange
+      onChange: this.onSelectChange,
     };
 
     return (
       <div className="plug-content-wrap">
-        <div style={{display: "flex"}}>
+        <div style={{ display: "flex" }}>
           <Select
             value={pluginId || undefined}
             onChange={this.searchOnchange}
             placeholder={getIntlContent("SHENYU.PLUGIN.SELECTNAME")}
             style={{ width: 240 }}
             allowClear
-          >
-            {
-              pluginDropDownList && pluginDropDownList.map((item,i)=>{
-              return(
-                <Option key={i} value={item.id}>{item.name}</Option>
-              )
-              })
+            showSearch
+            filterOption={(input, option) =>
+              option.props.children
+                .toLowerCase()
+                .indexOf(input.toLowerCase()) >= 0
             }
+          >
+            {pluginDropDownList &&
+              pluginDropDownList.map((item, i) => {
+                return (
+                  <Option key={i} value={item.id}>
+                    {item.name}
+                  </Option>
+                );
+              })}
           </Select>
           <Input
+            allowClear
             value={field}
             onChange={this.fieldOnchange}
             placeholder={getIntlContent("SHENYU.PLUGIN.FIELDNAME")}
@@ -513,24 +626,21 @@ export default class PluginHandle extends Component {
           <AuthButton perms="system:pluginHandler:delete">
             <Popconfirm
               title={getIntlContent("SHENYU.COMMON.DELETE")}
-              placement='bottom'
+              placement="bottom"
               onConfirm={() => {
-                this.deleteClick()
+                this.deleteClick();
               }}
               okText={getIntlContent("SHENYU.COMMON.SURE")}
               cancelText={getIntlContent("SHENYU.COMMON.CALCEL")}
             >
-              <Button
-                style={{marginLeft: 20}}
-                type="danger"
-              >
+              <Button style={{ marginLeft: 20 }} type="danger">
                 {getIntlContent("SHENYU.COMMON.DELETE.NAME")}
               </Button>
             </Popconfirm>
           </AuthButton>
           <AuthButton perms="system:pluginHandler:add">
             <Button
-              style={{marginLeft: 20}}
+              style={{ marginLeft: 20 }}
               type="primary"
               onClick={this.addClick}
             >
@@ -541,11 +651,11 @@ export default class PluginHandle extends Component {
         <Table
           size="small"
           components={this.components}
-          style={{marginTop: 30}}
+          style={{ marginTop: 30 }}
           bordered
           loading={loading}
           columns={tableColumns}
-          scroll={{ x: 1550 }}
+          // scroll={{ x: 1550 }}
           dataSource={pluginHandleList}
           rowSelection={rowSelection}
           pagination={{
@@ -556,7 +666,7 @@ export default class PluginHandle extends Component {
             current: currentPage,
             pageSize,
             onShowSizeChange: this.onShowSizeChange,
-            onChange: this.pageOnchange
+            onChange: this.pageOnchange,
           }}
         />
         {popup}

@@ -15,21 +15,35 @@
  * limitations under the License.
  */
 
-import React from 'react';
-import { Spin } from 'antd';
+import React from "react";
+import { Spin } from "antd";
 
 export default class PromiseRender extends React.PureComponent {
-  state = {
-    component: null,
-  };
+  constructor(props) {
+    super(props);
+    this.state = {
+      component: null,
+      prevPropsPromise: null,
+    };
+  }
 
   componentDidMount() {
     this.setRenderComponent(this.props);
   }
 
-  componentWillReceiveProps(nextProps) {
-    // new Props enter
-    this.setRenderComponent(nextProps);
+  static getDerivedStateFromProps(nextProps, prevState) {
+    if (nextProps.promise !== prevState.prevPropsPromise) {
+      return {
+        prevPropsPromise: nextProps.promise,
+      };
+    }
+    return null;
+  }
+
+  componentDidUpdate(prevProps) {
+    if (this.props.promise !== prevProps.promise) {
+      this.setRenderComponent(this.props);
+    }
   }
 
   // set render Component : ok or error
@@ -53,7 +67,7 @@ export default class PromiseRender extends React.PureComponent {
   // AuthorizedRoute is already instantiated
   // Authorized  render is already instantiated, children is no instantiated
   // Secured is not instantiated
-  checkIsInstantiation = target => {
+  checkIsInstantiation = (target) => {
     if (!React.isValidElement(target)) {
       return target;
     }
@@ -67,11 +81,11 @@ export default class PromiseRender extends React.PureComponent {
     ) : (
       <div
         style={{
-          width: '100%',
-          height: '100%',
-          margin: 'auto',
+          width: "100%",
+          height: "100%",
+          margin: "auto",
           paddingTop: 50,
-          textAlign: 'center',
+          textAlign: "center",
         }}
       >
         <Spin size="large" />

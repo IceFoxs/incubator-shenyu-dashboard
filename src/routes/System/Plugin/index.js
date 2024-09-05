@@ -16,22 +16,36 @@
  */
 
 import React, { Component } from "react";
-import { Table, Input, Button, message, Popconfirm, Select, Popover, Tag, Typography } from "antd";
+import {
+  Table,
+  Input,
+  Button,
+  message,
+  Popconfirm,
+  Select,
+  Popover,
+  Tag,
+  Typography,
+  Switch,
+} from "antd";
 import { connect } from "dva";
+import { Link } from "dva/router";
 import { resizableComponents } from "../../../utils/resizable";
 import AddModal from "./AddModal";
 import { getCurrentLocale, getIntlContent } from "../../../utils/IntlUtils";
 import AuthButton from "../../../utils/AuthButton";
-import { resetAuthMenuCache } from "../../../utils/AuthRoute";
+import { refreshAuthMenus } from "../../../utils/AuthRoute";
+import { getUpdateModal, updatePluginsEnabled } from "../../../utils/plugin";
 
 const { Text } = Typography;
 
 const { Option } = Select;
 
-@connect(({ plugin, loading, global }) => ({
+@connect(({ plugin, resource, loading, global }) => ({
   plugin,
+  authMenu: resource.authMenu,
   language: global.language,
-  loading: loading.effects["plugin/fetch"]
+  loading: loading.effects["plugin/fetch"],
 }))
 export default class Plugin extends Component {
   components = resizableComponents;
@@ -47,12 +61,13 @@ export default class Plugin extends Component {
       popup: "",
       localeName: window.sessionStorage.getItem("locale")
         ? window.sessionStorage.getItem("locale")
-        : "en-US"
+        : "en-US",
+      columns: [],
     };
   }
 
-  componentWillMount() {
-    this.query()
+  componentDidMount() {
+    this.query();
     this.initPluginColumns();
   }
 
@@ -65,129 +80,103 @@ export default class Plugin extends Component {
     }
   }
 
-  handleResize = index => (e, { size }) => {
-    this.setState(({ columns }) => {
-      const nextColumns = [...columns];
-      nextColumns[index] = {
-        ...nextColumns[index],
-        width: size.width
-      };
-      return { columns: nextColumns };
-    });
+  handleResize =
+    (index) =>
+    (e, { size }) => {
+      this.setState(({ columns }) => {
+        const nextColumns = [...columns];
+        nextColumns[index] = {
+          ...nextColumns[index],
+          width: size.width,
+        };
+        return { columns: nextColumns };
+      });
+    };
+
+  onSelectChange = (selectedRowKeys) => {
+    this.setState({ selectedRowKeys }, this.query);
   };
 
-  onSelectChange = selectedRowKeys => {
-    this.setState({ selectedRowKeys }, this.query);
+  currentQueryPayload = (override) => {
+    const { name, enabled, currentPage, pageSize } = this.state;
+    return {
+      name,
+      enabled,
+      currentPage,
+      pageSize,
+      ...override,
+    };
   };
 
   query = () => {
     const { dispatch } = this.props;
-    const { name, enabled, currentPage, pageSize } = this.state;
     dispatch({
       type: "plugin/fetch",
-      payload: {
-        name,
-        enabled,
-        currentPage,
-        pageSize
-      }
-    });
-  }
-
-  getAllPlugins = page => {
-    const { dispatch } = this.props;
-    const { name, enabled,pageSize } = this.state;
-    dispatch({
-      type: "plugin/fetch",
-      payload: {
-        name,
-        enabled,
-        currentPage: page,
-        pageSize
-      }
+      payload: this.currentQueryPayload(),
     });
   };
 
-  pageOnchange = page => {
+  pageOnchange = (page) => {
     this.setState({ currentPage: page }, this.query);
   };
 
-  onShowSizeChange = (currentPage,pageSize) => {
-    this.setState({ currentPage: 1, pageSize}, this.query);
+  onShowSizeChange = (currentPage, pageSize) => {
+    this.setState({ currentPage: 1, pageSize }, this.query);
   };
 
   closeModal = (refresh = false) => {
     if (refresh) {
-      this.setState({ popup: "", currentPage:1 }, this.query);
-      return
+      this.setState({ popup: "", currentPage: 1 }, this.query);
+      return;
     }
-    this.setState({ popup: "", currentPage:1 });
+    this.setState({ popup: "", currentPage: 1 });
   };
 
-  editClick = record => {
+  editClick = (record) => {
     const { dispatch } = this.props;
-    const { currentPage,pageSize } = this.state;
-    const pluginName = this.state.name;
-    dispatch({
-      type: "plugin/fetchItem",
-      payload: {
-        id: record.id
+    getUpdateModal({
+      pluginId: record.id,
+      dispatch,
+      fetchValue: this.currentQueryPayload(),
+      callback: (popup) => {
+        this.setState({ popup });
       },
-      callback: plugin => {
-        dispatch({
-          type: "plugin/fetchByPluginId",
-          payload: {
-            pluginId: record.id,
-            type: "3"
-          },
-          callback: pluginConfigList => {
-            this.setState({
-              popup: (
-                <AddModal
-                  disabled={true}
-                  {...plugin}
-                  {...pluginConfigList}
-                  handleOk={values => {
-                    const { name, enabled, id, role, config, sort } = values;
-                    dispatch({
-                      type: "plugin/update",
-                      payload: {
-                        config,
-                        role,
-                        name,
-                        enabled,
-                        id,
-                        sort
-                      },
-                      fetchValue: {
-                        name: pluginName,
-                        currentPage,
-                        pageSize
-                      },
-                      callback: () => {
-                        this.setState({ selectedRowKeys: [] });
-                        this.closeModal(true);
-                      }
-                    });
-                  }}
-                  handleCancel={() => {
-                    this.closeModal();
-                  }}
-                />
-              )
-            });
-          }
-        });
-      }
+      updatedCallback: () => {
+        this.setState({ selectedRowKeys: [] });
+        this.closeModal(true);
+      },
+      canceledCallback: () => {
+        this.closeModal();
+      },
     });
   };
 
-  searchOnchange = e => {
-    this.setState({ name:e.target.value}, this.query);
+  resourceClick = (record) => {
+    // code here...
+    const { dispatch } = this.props;
+    const { name, role, sort, config, id, enabled } = record;
+    dispatch({
+      type: "plugin/createPluginResource",
+      payload: {
+        name,
+        role,
+        sort,
+        config,
+        id,
+        enabled,
+      },
+      callback: () => {
+        refreshAuthMenus({ dispatch });
+      },
+    });
   };
 
-  enabledOnchange = e => {
-    this.setState({ enabled:e }, this.query);
+  searchOnchange = (e) => {
+    this.setState({ name: e.target.value }, this.query);
+  };
+
+  enabledOnchange = (e) => {
+    this.setState({ enabled: e }, this.query);
   };
 
   searchClick = () => {
@@ -196,28 +185,20 @@ export default class Plugin extends Component {
 
   deleteClick = () => {
     const { dispatch } = this.props;
-    const { name, currentPage, selectedRowKeys } = this.state;
+    const { selectedRowKeys } = this.state;
     if (selectedRowKeys && selectedRowKeys.length > 0) {
       dispatch({
         type: "plugin/delete",
         payload: {
-          list: selectedRowKeys
+          list: selectedRowKeys,
         },
-        fetchValue: {
-          name,
-          currentPage,
-          pageSize: 12
-        },
+        fetchValue: this.currentQueryPayload({
+          pageSize: 12,
+        }),
         callback: () => {
           this.setState({ selectedRowKeys: [] });
-          dispatch({
-            type: "global/fetchPlugins",
-            payload: {
-              callback: () => {}
-            }
-          });
-          this.fetchPermissions();
-        }
+          refreshAuthMenus({ dispatch });
+        },
       });
     } else {
       message.destroy();
@@ -226,15 +207,13 @@ export default class Plugin extends Component {
   };
 
   addClick = () => {
-    const { currentPage,pageSize } = this.state;
-    const pluginName = this.state.name;
     this.setState({
       popup: (
         <AddModal
           disabled={false}
-          handleOk={values => {
+          handleOk={(values) => {
             const { dispatch } = this.props;
-            const { name, enabled, role, config, sort } = values;
+            const { name, enabled, role, config, sort, file } = values;
             dispatch({
               type: "plugin/add",
               payload: {
@@ -242,72 +221,55 @@ export default class Plugin extends Component {
                 config,
                 role,
                 enabled,
-                sort
+                sort,
+                file,
               },
-              fetchValue: {
-                name: pluginName,
-                currentPage,
-                pageSize
-              },
+              fetchValue: this.currentQueryPayload(),
               callback: () => {
                 this.closeModal(true);
-                dispatch({
-                  type: "global/fetchPlugins",
-                  payload: {
-                    callback: () => {}
-                  }
-                });
-                this.fetchPermissions();
-              }
+                refreshAuthMenus({ dispatch });
+              },
             });
           }}
           handleCancel={() => {
             this.closeModal();
           }}
         />
-      )
+      ),
     });
   };
 
-  fetchPermissions = () => {
+  // 数据状态切换
+  statusSwitch = ({ list, enabled, callback }) => {
     const { dispatch } = this.props;
-    dispatch({
-      type: "global/refreshPermission",
-      payload: {
-        callback: () => {
-          resetAuthMenuCache();
-        }
-      }
+    updatePluginsEnabled({
+      list,
+      dispatch,
+      callback,
+      enabled,
+      fetchValue: this.currentQueryPayload(),
     });
   };
 
   // 批量启用或禁用
   enableClick = () => {
     const { dispatch } = this.props;
-    const { selectedRowKeys, currentPage, pageSize, name } = this.state;
+    const { selectedRowKeys } = this.state;
     if (selectedRowKeys && selectedRowKeys.length > 0) {
       dispatch({
         type: "plugin/fetchItem",
         payload: {
-          id: selectedRowKeys[0]
+          id: selectedRowKeys[0],
         },
-        callback: user => {
-          dispatch({
-            type: "plugin/updateEn",
-            payload: {
-              list: selectedRowKeys,
-              enabled: !user.enabled
-            },
-            fetchValue: {
-              name,
-              currentPage,
-              pageSize
-            },
+        callback: (user) => {
+          this.statusSwitch({
+            list: selectedRowKeys,
+            enabled: !user.enabled,
             callback: () => {
               this.setState({ selectedRowKeys: [] });
-            }
+            },
           });
-        }
+        },
       });
     } else {
       message.destroy();
@@ -315,26 +277,9 @@ export default class Plugin extends Component {
     }
   };
 
-  // 同步插件数据
-  syncAllClick = () => {
-    const { dispatch } = this.props;
-    dispatch({
-      type: "plugin/asyncAll"
-    });
-  };
-
-  operateChange = (checked, record) => {
-    const { dispatch } = this.props;
-    const { id } = record;
-    dispatch({
-      type: "plugin/changeStatus",
-      payload: { id, enabled: checked }
-    });
-  };
-
   changeLocale(locale) {
     this.setState({
-      localeName: locale
+      localeName: locale,
     });
     getCurrentLocale(this.state.localeName);
   }
@@ -349,9 +294,25 @@ export default class Plugin extends Component {
           key: "name",
           ellipsis: true,
           width: 120,
-          render: text => {
-            return <div style={{color: "#260033","fontWeight":"bold"}}>{text || "----"}</div>;
-          }
+          render: (text, record) => {
+            return record.url ? (
+              <Link to={record.url}>
+                <div
+                  style={{
+                    color: "#1890ff",
+                    fontWeight: "bold",
+                    textDecorationLine: "underline",
+                  }}
+                >
+                  {text || "----"}
+                </div>
+              </Link>
+            ) : (
+              <div style={{ color: "#260033", fontWeight: "bold" }}>
+                {text || "----"}
+              </div>
+            );
+          },
         },
         {
           align: "center",
@@ -361,9 +322,9 @@ export default class Plugin extends Component {
           key: "role",
           width: 120,
           sorter: (a, b) => (a.role > b.role ? 1 : -1),
-          render: text => {
-            return <div style={{color: "#1f640a"}}>{text || "----"}</div>;
-          }
+          render: (text) => {
+            return <div style={{ color: "#1f640a" }}>{text || "----"}</div>;
+          },
         },
         {
           align: "center",
@@ -373,9 +334,9 @@ export default class Plugin extends Component {
           key: "sort",
           width: 120,
           sorter: (a, b) => (a.role > b.role ? 1 : -1),
-          render: text => {
-            return <div style={{color: "#014955"}}>{text}</div>;
-          }
+          render: (text) => {
+            return <div style={{ color: "#014955" }}>{text}</div>;
+          },
         },
         {
           align: "center",
@@ -391,20 +352,30 @@ export default class Plugin extends Component {
                 <Tag color="#3b9a9c">{record.sort}</Tag>
               </div>
             );
-            const t = JSON.stringify(JSON.parse(text !== null?text:'{}'), null, 4) ;
+            const t = JSON.stringify(
+              JSON.parse(text !== null && text.length > 0 ? text : "{}"),
+              null,
+              4,
+            );
             const content = (
               <div>
-                <Text type="secondary">{`${getIntlContent("SHENYU.SYSTEM.CREATETIME") }: ${ record.dateCreated}`}</Text>
+                <Text type="secondary">{`${getIntlContent("SHENYU.SYSTEM.CREATETIME")}: ${record.dateCreated}`}</Text>
                 <br />
-                <Text type="secondary">{`${getIntlContent("SHENYU.SYSTEM.UPDATETIME") }: ${ record.dateUpdated}`}</Text>
+                <Text type="secondary">{`${getIntlContent("SHENYU.SYSTEM.UPDATETIME")}: ${record.dateUpdated}`}</Text>
                 <hr />
-                <div style={{ "fontWeight":"bold" }}>
-                  <pre><code>{t}</code></pre>
+                <div style={{ fontWeight: "bold" }}>
+                  <pre>
+                    <code>{t}</code>
+                  </pre>
                 </div>
               </div>
             );
-            return (<Popover content={content} title={tag}><div>{text || "----"}</div></Popover>);
-          }
+            return (
+              <Popover content={content} title={tag}>
+                <div>{text || "----"}</div>
+              </Popover>
+            );
+          },
         },
         {
           align: "center",
@@ -415,21 +386,31 @@ export default class Plugin extends Component {
           width: 80,
           sorter: (a, b) =>
             (a.enabled || "-1") > (b.enabled || "-1") ? 1 : -1,
-          render: text => {
-            if (text) {
-              return (
-                <div className="open" style={{ "fontWeight":"bold" }}>
-                  {getIntlContent("SHENYU.COMMON.OPEN")}
-                </div>
-              );
-            } else {
-              return (
-                <div className="close" style={{ "fontWeight":"bold" }}>
-                  {getIntlContent("SHENYU.COMMON.CLOSE")}
-                </div>
-              );
-            }
-          }
+          render: (text, row) => (
+            <AuthButton
+              perms="system:plugin:disable"
+              noAuth={
+                text ? (
+                  <div className="open">
+                    {getIntlContent("SHENYU.COMMON.OPEN")}
+                  </div>
+                ) : (
+                  <div className="close">
+                    {getIntlContent("SHENYU.COMMON.CLOSE")}
+                  </div>
+                )
+              }
+            >
+              <Switch
+                checkedChildren={getIntlContent("SHENYU.COMMON.OPEN")}
+                unCheckedChildren={getIntlContent("SHENYU.COMMON.CLOSE")}
+                checked={text}
+                onChange={(checked) => {
+                  this.statusSwitch({ list: [row.id], enabled: checked });
+                }}
+              />
+            </AuthButton>
+          ),
         },
         {
           align: "center",
@@ -437,47 +418,76 @@ export default class Plugin extends Component {
           dataIndex: "time",
           key: "time",
           ellipsis: true,
-          width: 80,
+          width: 160,
           fixed: "right",
           render: (text, record) => {
             return (
-              <AuthButton perms="system:plugin:edit">
-                <div
-                  className="edit"
-                  onClick={() => {
-                    this.editClick(record);
-                  }}
-                >
-                  {getIntlContent("SHENYU.SYSTEM.EDITOR")}
-                </div>
-              </AuthButton>
+              <div className="optionParts">
+                <AuthButton perms="system:plugin:edit">
+                  <div
+                    className="edit"
+                    onClick={() => {
+                      this.editClick(record);
+                    }}
+                  >
+                    {getIntlContent("SHENYU.SYSTEM.EDITOR")}
+                  </div>
+                </AuthButton>
+                <AuthButton perms="system:plugin:resource">
+                  <div
+                    className="edit"
+                    onClick={() => {
+                      this.resourceClick(record);
+                    }}
+                  >
+                    {getIntlContent("SHENYU.BUTTON.SYSTEM.RESOURCE")}
+                  </div>
+                </AuthButton>
+              </div>
             );
-          }
-        }
-      ]
+          },
+        },
+      ],
     });
   }
 
   render() {
-    const { plugin, loading } = this.props;
+    const { plugin, loading, authMenu } = this.props;
     const { pluginList, total } = plugin;
-    const { currentPage, pageSize, selectedRowKeys, name, enabled, popup } = this.state;
+    const { currentPage, pageSize, selectedRowKeys, name, enabled, popup } =
+      this.state;
     const columns = this.state.columns.map((col, index) => ({
       ...col,
-      onHeaderCell: column => ({
+      onHeaderCell: (column) => ({
         width: column.width,
-        onResize: this.handleResize(index)
-      })
+        onResize: this.handleResize(index),
+      }),
     }));
     const rowSelection = {
       selectedRowKeys,
-      onChange: this.onSelectChange
+      onChange: this.onSelectChange,
     };
+    const flatList = (map, list) => {
+      list.forEach((element) => {
+        if (!element.children) {
+          map[element.id] = element;
+        } else {
+          flatList(map, element.children);
+        }
+      });
+      return map;
+    };
+    const flatAuthMenu = flatList({}, authMenu);
+
+    pluginList.forEach((p) => {
+      p.url = (flatAuthMenu[p.id] ?? {}).path;
+    });
 
     return (
       <div className="plug-content-wrap">
         <div style={{ display: "flex" }}>
           <Input
+            allowClear
             value={name}
             onChange={this.searchOnchange}
             placeholder={getIntlContent("SHENYU.PLUGIN.INPUTNAME")}
@@ -526,16 +536,6 @@ export default class Plugin extends Component {
               {getIntlContent("SHENYU.SYSTEM.ADDDATA")}
             </Button>
           </AuthButton>
-          <AuthButton perms="system:plugin:modify">
-            <Button
-              style={{ marginLeft: 20 }}
-              icon="reload"
-              type="primary"
-              onClick={this.syncAllClick}
-            >
-              {getIntlContent("SHENYU.PLUGIN.SYNCALLDATA")}
-            </Button>
-          </AuthButton>
           <AuthButton perms="system:plugin:disable">
             <Button
               style={{ marginLeft: 20 }}
@@ -564,7 +564,7 @@ export default class Plugin extends Component {
             current: currentPage,
             pageSize,
             onShowSizeChange: this.onShowSizeChange,
-            onChange: this.pageOnchange
+            onChange: this.pageOnchange,
           }}
         />
         {popup}

@@ -15,21 +15,22 @@
  * limitations under the License.
  */
 
+/* eslint-disable react/static-property-placement */
 import React from "react";
 import PropTypes from "prop-types";
-import {Layout, message} from "antd";
+import { Layout, message } from "antd";
 import DocumentTitle from "react-document-title";
-import {connect} from "dva";
-import {Redirect, Route, Switch} from "dva/router";
-import {ContainerQuery} from "react-container-query";
+import { connect } from "dva";
+import { Redirect, Route, Switch } from "dva/router";
+import { ContainerQuery } from "react-container-query";
 import classNames from "classnames";
 import pathToRegexp from "path-to-regexp";
 import GlobalHeader from "../components/GlobalHeader";
 import SiderMenu from "../components/SiderMenu";
 import NotFound from "../routes/Exception/404";
-import {getRoutes} from "../utils/utils";
-import AuthRoute, {checkMenuAuth, getAuthMenus} from "../utils/AuthRoute";
-import {getMenuData} from "../common/menu";
+import { getRoutes } from "../utils/utils";
+import AuthRoute, { checkMenuAuth, getAuthMenus } from "../utils/AuthRoute";
+import { getMenuData } from "../common/menu";
 import logo from "../assets/logo.svg";
 import TitleLogo from "../assets/TitleLogo.svg";
 
@@ -38,7 +39,7 @@ const MyContext = React.createContext();
 message.config({
   top: 200,
   duration: 2,
-  maxCount: 3
+  maxCount: 3,
 });
 
 const { Content, Header } = Layout;
@@ -47,14 +48,14 @@ const { Content, Header } = Layout;
  * Get the redirect address from the menu.
  */
 const redirectData = [];
-const getRedirect = item => {
+const getRedirect = (item) => {
   if (item && item.children) {
     if (item.children[0] && item.children[0].path) {
       redirectData.push({
         from: `${item.path}`,
-        to: `${item.children[0].path}`
+        to: `${item.children[0].path}`,
       });
-      item.children.forEach(children => {
+      item.children.forEach((children) => {
         getRedirect(children);
       });
     }
@@ -71,6 +72,7 @@ getMenuData().forEach(getRedirect);
 const getBreadcrumbNameMap = (menuData, routerData) => {
   const result = {};
   const childResult = {};
+  // eslint-disable-next-line no-unused-vars
   for (const i of menuData) {
     if (!routerData[i.path]) {
       result[i.path] = i;
@@ -79,32 +81,35 @@ const getBreadcrumbNameMap = (menuData, routerData) => {
       Object.assign(childResult, getBreadcrumbNameMap(i.children, routerData));
     }
   }
-  return Object.assign({}, routerData, result, childResult);
+  return { ...routerData, ...result, ...childResult };
 };
 
 const query = {
   "screen-lg": {
     minWidth: 992,
-    maxWidth: 1199
+    maxWidth: 1199,
   },
   "screen-xl": {
     minWidth: 1200,
-    maxWidth: 1599
+    maxWidth: 1599,
   },
   "screen-xxl": {
-    minWidth: 1600
-  }
+    minWidth: 1600,
+  },
 };
 
-@connect(({ global, loading }) => ({
+@connect(({ global, resource, loading }) => ({
   plugins: global.plugins,
+  menuTree: resource.menuTree,
   permissions: global.permissions,
-  loading: loading.effects["global/fetchPlugins"]
+  loading:
+    loading.effects["resource/fetchMenuTree"] ||
+    loading.effects["global/fetchPlugins"],
 }))
 class BasicLayout extends React.PureComponent {
   static childContextTypes = {
     location: PropTypes.object,
-    breadcrumbNameMap: PropTypes.object
+    breadcrumbNameMap: PropTypes.object,
   };
 
   constructor(props) {
@@ -113,7 +118,7 @@ class BasicLayout extends React.PureComponent {
       localeName: window.sessionStorage.getItem("locale")
         ? window.sessionStorage.getItem("locale")
         : "en-US",
-      pluginsLoaded: false
+      pluginsLoaded: false,
     };
   }
 
@@ -121,7 +126,7 @@ class BasicLayout extends React.PureComponent {
     const { location, routerData } = this.props;
     return {
       location,
-      breadcrumbNameMap: getBreadcrumbNameMap(getMenuData(), routerData)
+      breadcrumbNameMap: getBreadcrumbNameMap(getMenuData(), routerData),
     };
   }
 
@@ -129,28 +134,41 @@ class BasicLayout extends React.PureComponent {
     const token = window.sessionStorage.getItem("token");
     if (!token) {
       this.props.history.push({
-        pathname: "/user/login"
+        pathname: "/user/login",
       });
       return;
     }
     const { dispatch } = this.props;
     dispatch({
-      type: "global/fetchPlatform"
+      type: "global/fetchPlatform",
+    });
+    dispatch({
+      type: "resource/fetchMenuTree",
     });
     dispatch({
       type: "global/fetchPlugins",
       payload: {
         callback: () => {
           this.setState({
-            pluginsLoaded: true
+            pluginsLoaded: true,
           });
-        }
-      }
+        },
+      },
+    });
+  }
+
+  componentDidUpdate() {
+    const { dispatch } = this.props;
+    dispatch({
+      type: "resource/authorizedMenuTree",
+      payload: {
+        authMenu: this.processMenus(),
+      },
     });
   }
 
   componentWillUnmount() {
-    this.setState = () => {}
+    this.setState = () => {};
   }
 
   getPageTitle() {
@@ -159,7 +177,7 @@ class BasicLayout extends React.PureComponent {
     let title = "Apache ShenYu - Gateway Management";
     let currRouterData = null;
     // match params path
-    Object.keys(routerData).forEach(key => {
+    Object.keys(routerData).forEach((key) => {
       if (pathToRegexp(key).test(pathname)) {
         currRouterData = routerData[key];
       }
@@ -183,7 +201,7 @@ class BasicLayout extends React.PureComponent {
       const { routerData, permissions } = this.props;
       // get the first authorized route path in routerData
       return Object.keys(routerData).find(
-        item => checkMenuAuth(item, permissions) && item !== "/"
+        (item) => checkMenuAuth(item, permissions) && item !== "/",
       );
     }
     return redirect;
@@ -192,85 +210,37 @@ class BasicLayout extends React.PureComponent {
   handleLogout = () => {
     const { dispatch } = this.props;
     dispatch({
-      type: "login/logout"
+      type: "login/logout",
     });
 
     dispatch({
-      type: "global/resetPermission"
+      type: "global/resetPermission",
     });
   };
 
-  changeLocalName = value => {
+  changeLocalName = (value) => {
     const { dispatch } = this.props;
     this.setState({
-      localeName: value
+      localeName: value,
     });
     dispatch({
       type: "global/changeLanguage",
-      payload: value
+      payload: value,
     });
   };
 
+  processMenus() {
+    const { plugins, menuTree, permissions } = this.props;
+    const { pluginsLoaded } = this.state;
+
+    return getAuthMenus(plugins, menuTree, permissions, pluginsLoaded);
+  }
+
   render() {
-    const {
-      collapsed,
-      routerData,
-      match,
-      location,
-      plugins,
-      permissions,
-      dispatch
-    } = this.props;
-    const { localeName, pluginsLoaded } = this.state;
+    const { collapsed, routerData, match, location, dispatch } = this.props;
+    const { localeName } = this.state;
+    const processedMenus = this.processMenus();
     const bashRedirect = this.getBaseRedirect();
-    let menus = getMenuData();
-
-    const menuMap = {};
-    plugins.forEach(item => {
-      if (menuMap[item.role] === undefined) {
-        menuMap[item.role] = [];
-      }
-      menuMap[item.role].push(item);
-    });
-    Object.keys(menuMap).forEach((key) => {
-      menus[0].children.push({
-        name: key,
-        path: `/plug/${menuMap[key][0].role}`,
-        authority: undefined,
-        icon: "unordered-list",
-        children: menuMap[key].map(item => {
-          const { name } = item;
-          return {
-            name: name.replace(name[0], name[0].toUpperCase()),
-            path: `/plug/${item.role}/${item.name}`,
-            authority: undefined,
-            id: item.id,
-            locale: `SHENYU.MENU.PLUGIN.${item.name.toUpperCase()}`,
-            exact: true
-          };
-        })
-      });
-    });
-
-    menus = getAuthMenus(menus, permissions, pluginsLoaded);
-
-    // Filter empty menu
-    function removeEmptyMenu(menuArr) {
-      return menuArr.filter(menu => {
-        if (Array.isArray(menu.children)) {
-          if (menu.children.length === 0) {
-            return false;
-          } else {
-            menu.children = removeEmptyMenu(menu.children);
-          }
-        }
-        return true;
-      });
-    }
-
-    if (Array.isArray(menus) && menus.length) {
-      removeEmptyMenu(menus);
-    }
 
     const layout = (
       <Layout>
@@ -278,7 +248,7 @@ class BasicLayout extends React.PureComponent {
           logo={logo}
           TitleLogo={TitleLogo}
           dispatch={dispatch}
-          menuData={menus}
+          menuData={processedMenus}
           collapsed={collapsed}
           location={location}
           onCollapse={this.handleMenuCollapse}
@@ -298,10 +268,10 @@ class BasicLayout extends React.PureComponent {
             style={{ height: "100%", position: "relative" }}
           >
             <Switch>
-              {redirectData.map(item => (
+              {redirectData.map((item) => (
                 <Redirect key={item.from} exact from={item.from} to={item.to} />
               ))}
-              {getRoutes(match.path, routerData).map(item => (
+              {getRoutes(match.path, routerData).map((item) => (
                 <AuthRoute
                   key={item.key}
                   path={item.path}
@@ -323,7 +293,7 @@ class BasicLayout extends React.PureComponent {
       <MyContext.Provider value={localeName}>
         <DocumentTitle title={this.getPageTitle()}>
           <ContainerQuery query={query}>
-            {params => (
+            {(params) => (
               <div style={{ minWidth: 1200 }} className={classNames(params)}>
                 {layout}
               </div>
@@ -336,5 +306,5 @@ class BasicLayout extends React.PureComponent {
 }
 
 export default connect(({ global = {} }) => ({
-  collapsed: global.collapsed
+  collapsed: global.collapsed,
 }))(BasicLayout);

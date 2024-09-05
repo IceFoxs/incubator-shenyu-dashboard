@@ -15,16 +15,31 @@
  * limitations under the License.
  */
 
-import { Col, Row, Card, BackTop, Empty } from "antd";
+/* eslint-disable no-unused-expressions */
+/* eslint-disable react/jsx-no-constructed-context-values */
+import { Col, Row, Card, Empty, message } from "antd";
 import React, { useEffect, useState } from "react";
+import {
+  getApi,
+  getDocMenus,
+  getApiDetail,
+  deleteApi,
+  getTagDetail,
+  deleteTag,
+  getApiMockRequest,
+} from "../../services/api";
 import SearchApi from "./components/SearchApi";
 import ApiInfo from "./components/ApiInfo";
-import { getDocItem, getDocMenus } from "../../services/api";
+import TagInfo from "./components/TagInfo";
 import ApiContext from "./components/ApiContext";
 
 function ApiDoc() {
+  const [tagDetail, setTagDetail] = useState({});
   const [apiDetail, setApiDetail] = useState({});
   const [apiData, setApiData] = useState({});
+  const [apiMock, setApiMock] = useState({});
+
+  const searchApiRef = React.createRef();
 
   const initData = async () => {
     const { code, data = {} } = await getDocMenus();
@@ -51,12 +66,88 @@ function ApiDoc() {
   const handleSelectNode = async (_, e) => {
     const {
       node: {
-        props: { id }
-      }
+        props: { id, isLeaf },
+      },
     } = e;
-    const { code, data } = await getDocItem({ id });
-    if (code === 200) {
+    if (isLeaf) {
+      const { code, message: msg, data } = await getApiDetail(id);
+      if (code !== 200) {
+        message.error(msg);
+        return;
+      }
       setApiDetail(data);
+      setTagDetail({});
+
+      const {
+        code: mockCode,
+        message: mockMsg,
+        data: mockData,
+      } = await getApiMockRequest(id);
+      if (mockCode !== 200) {
+        message.error(mockMsg);
+        return;
+      }
+      setApiMock(mockData);
+    } else {
+      const { code, message: msg, data } = await getTagDetail(id);
+      if (code !== 200) {
+        message.error(msg);
+        return;
+      }
+      const {
+        code: apiCode,
+        message: apiMsg,
+        data: apiDataRecords,
+      } = await getApi(id);
+      if (apiCode !== 200) {
+        message.error(apiMsg);
+        return;
+      }
+      const { dataList: apiDataList } = apiDataRecords;
+      data.apiDataList = apiDataList;
+      setTagDetail(data);
+      setApiDetail({});
+    }
+  };
+
+  const handleDelete = async () => {
+    let res = {};
+    if (tagDetail.id) {
+      res = await deleteTag([tagDetail.id]);
+    }
+    if (apiDetail.id) {
+      res = await deleteApi([apiDetail.id]);
+    }
+    const { code, message: msg } = res;
+    if (code !== 200) {
+      message.error(msg);
+    } else {
+      message.success(msg);
+      if (tagDetail.id) {
+        searchApiRef.current?.updateTree(null, "tag");
+        setTagDetail({});
+      }
+      if (apiDetail.id) {
+        searchApiRef.current?.updateTree(null, "api");
+      }
+    }
+  };
+
+  const handleUpdate = () => {
+    if (tagDetail.id) {
+      searchApiRef.current?.addOrUpdateTag(tagDetail);
+    }
+    if (apiDetail.id) {
+      searchApiRef.current?.addOrUpdateApi(apiDetail);
+    }
+  };
+
+  // eslint-disable-next-line no-unused-vars
+  const handleAfterUpdate = (data, refType) => {
+    if (refType === "tag") {
+      setTagDetail({ ...tagDetail, ...data });
+    } else if (refType === "api") {
+      setApiDetail({ ...apiDetail, ...data });
     }
   };
 
@@ -68,24 +159,41 @@ function ApiDoc() {
     <ApiContext.Provider
       value={{
         apiDetail,
-        apiData
+        apiData,
+        apiMock,
+        tagDetail,
       }}
     >
-      <Card style={{ margin: 24 }}>
-        <Row gutter={24}>
-          <Col span={6}>
-            <SearchApi onSelect={handleSelectNode} />
-          </Col>
-          <Col span={18}>
+      <Row gutter={12}>
+        <Col span={6}>
+          <Card style={{ margin: "24px 0 24px 24px" }}>
+            <SearchApi
+              onSelect={handleSelectNode}
+              ref={searchApiRef}
+              afterUpdate={handleAfterUpdate}
+            />
+          </Card>
+        </Col>
+        <Col span={18}>
+          <Card style={{ margin: "24px 24px 24px 0" }}>
+            {tagDetail.id ? (
+              <TagInfo
+                handleUpdate={handleUpdate}
+                handleDelete={handleDelete}
+              />
+            ) : null}
             {apiDetail.id ? (
-              <ApiInfo />
-            ) : (
+              <ApiInfo
+                handleUpdate={handleUpdate}
+                handleDelete={handleDelete}
+              />
+            ) : null}
+            {!tagDetail.id && !apiDetail.id && (
               <Empty description={false} style={{ padding: "160px 0" }} />
             )}
-          </Col>
-        </Row>
-        <BackTop />
-      </Card>
+          </Card>
+        </Col>
+      </Row>
     </ApiContext.Provider>
   );
 }

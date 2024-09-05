@@ -20,12 +20,12 @@ import { Table, Input, Button, message, Popconfirm } from "antd";
 import { connect } from "dva";
 import AddModal from "./AddModal";
 import { getIntlContent } from "../../../utils/IntlUtils";
-import AuthButton from '../../../utils/AuthButton';
+import AuthButton from "../../../utils/AuthButton";
 
 @connect(({ role, resource, loading }) => ({
   role,
   resource,
-  loading: loading.effects["role/fetch"]
+  loading: loading.effects["role/fetch"],
 }))
 export default class Role extends Component {
   constructor(props) {
@@ -35,88 +35,89 @@ export default class Role extends Component {
       pageSize: 12,
       selectedRowKeys: [],
       roleName: "",
-      popup: ""
+      popup: "",
     };
   }
 
-  componentWillMount() {
+  componentDidMount() {
     this.getAllRoles();
   }
 
-  onSelectChange = selectedRowKeys => {
+  onSelectChange = (selectedRowKeys) => {
     this.setState({ selectedRowKeys });
   };
 
   getAllRoles = () => {
     const { dispatch } = this.props;
-    const { roleName,currentPage,pageSize } = this.state;
+    const { roleName, currentPage, pageSize } = this.state;
     dispatch({
       type: "role/fetch",
       payload: {
         roleName,
         currentPage,
-        pageSize
-      }
+        pageSize,
+      },
     });
   };
 
-  pageOnchange = page => {
-    this.setState({ currentPage: page },this.getAllRoles);
+  pageOnchange = (page) => {
+    this.setState({ currentPage: page }, this.getAllRoles);
   };
 
-  onShowSizeChange = (currentPage,pageSize) => {
-    this.setState({ currentPage: 1, pageSize}, this.getAllRoles);
+  onShowSizeChange = (currentPage, pageSize) => {
+    this.setState({ currentPage: 1, pageSize }, this.getAllRoles);
   };
 
   closeModal = () => {
     this.setState({ popup: "" });
   };
 
-  editClick = record => {
+  editClick = (record) => {
     const { dispatch } = this.props;
-    const { currentPage,pageSize } = this.state;
+    const { currentPage, pageSize } = this.state;
     const name = this.state.roleName;
     dispatch({
       type: "role/fetchItem",
       payload: {
-        id: record.id
+        id: record.id,
       },
-      callback: role => {
+      callback: (role) => {
         this.setState({
           popup: (
             <AddModal
               {...role}
-              handleOk={values => {
-                const { roleName, description, id, currentPermissionIds } = values;
+              handleOk={(values) => {
+                const { roleName, description, id, currentPermissionIds } =
+                  values;
                 dispatch({
                   type: "role/update",
                   payload: {
                     roleName,
                     description,
                     currentPermissionIds,
-                    id
+                    id,
                   },
                   fetchValue: {
                     roleName: name,
                     currentPage,
-                    pageSize
+                    pageSize,
                   },
                   callback: () => {
                     this.closeModal();
-                  }
+                  },
                 });
               }}
               handleCancel={() => {
                 this.closeModal();
               }}
             />
-          )
+          ),
         });
-      }
+      },
     });
   };
 
-  searchOnchange = e => {
+  searchOnchange = (e) => {
     const roleName = e.target.value;
     this.setState({ roleName });
   };
@@ -132,16 +133,16 @@ export default class Role extends Component {
       dispatch({
         type: "role/delete",
         payload: {
-          list: selectedRowKeys
+          list: selectedRowKeys,
         },
         fetchValue: {
           roleName,
           currentPage,
-          pageSize
+          pageSize,
         },
         callback: () => {
           this.setState({ selectedRowKeys: [] });
-        }
+        },
       });
     } else {
       message.destroy();
@@ -150,7 +151,7 @@ export default class Role extends Component {
   };
 
   addClick = () => {
-    const { currentPage,pageSize } = this.state;
+    const { currentPage, pageSize } = this.state;
     const name = this.state.roleName;
     this.setState({
       popup: (
@@ -158,75 +159,76 @@ export default class Role extends Component {
           sysRole={{}}
           allPermissionInfo={{}}
           rolePermissionList={{}}
-          handleOk={values => {
+          handleOk={(values) => {
             const { dispatch } = this.props;
             const { roleName, description } = values;
             dispatch({
               type: "role/add",
               payload: {
                 roleName,
-                description
+                description,
               },
               fetchValue: {
                 roleName: name,
                 currentPage,
-                pageSize
+                pageSize,
               },
               callback: () => {
                 this.setState({ selectedRowKeys: [] });
                 this.closeModal();
-              }
+              },
             });
           }}
           handleCancel={() => {
             this.closeModal();
           }}
         />
-      )
+      ),
     });
   };
 
   render() {
     const { role, loading } = this.props;
     const { roleList, total } = role;
-    const { currentPage, pageSize, selectedRowKeys, roleName, popup } = this.state;
+    const { currentPage, pageSize, selectedRowKeys, roleName, popup } =
+      this.state;
     const roleColumns = [
       {
         align: "center",
         title: getIntlContent("SHENYU.SYSTEM.ROLENAME"),
         dataIndex: "roleName",
         key: "roleName",
-        ellipsis:true,
+        ellipsis: true,
       },
       {
         align: "center",
         title: getIntlContent("SHENYU.SYSTEM.ROLE.DESCRIPTION"),
         dataIndex: "description",
         key: "description",
-        ellipsis:true,
+        ellipsis: true,
       },
       {
         align: "center",
         title: getIntlContent("SHENYU.SYSTEM.CREATETIME"),
         dataIndex: "dateCreated",
         key: "dateCreated",
-        ellipsis:true,
-        sorter: (a,b) => a.dateCreated > b.dateCreated ? 1 : -1,
+        ellipsis: true,
+        sorter: (a, b) => (a.dateCreated > b.dateCreated ? 1 : -1),
       },
       {
         align: "center",
         title: getIntlContent("SHENYU.SYSTEM.UPDATETIME"),
         dataIndex: "dateUpdated",
         key: "dateUpdated",
-        ellipsis:true,
-        sorter: (a,b) => a.dateUpdated > b.dateUpdated ? 1 : -1,
+        ellipsis: true,
+        sorter: (a, b) => (a.dateUpdated > b.dateUpdated ? 1 : -1),
       },
       {
         align: "center",
         title: getIntlContent("SHENYU.COMMON.OPERAT"),
         dataIndex: "operate",
         key: "operate",
-        ellipsis:true,
+        ellipsis: true,
         render: (text, record) => {
           return (
             <AuthButton perms="system:role:edit">
@@ -240,19 +242,20 @@ export default class Role extends Component {
               </div>
             </AuthButton>
           );
-        }
-      }
+        },
+      },
     ];
 
     const rowSelection = {
       selectedRowKeys,
-      onChange: this.onSelectChange
+      onChange: this.onSelectChange,
     };
 
     return (
       <div className="plug-content-wrap">
         <div style={{ display: "flex" }}>
           <Input
+            allowClear
             value={roleName}
             onChange={this.searchOnchange}
             placeholder={getIntlContent("SHENYU.SYSTEM.ROLE.INPUT.NAME")}
@@ -270,17 +273,14 @@ export default class Role extends Component {
           <AuthButton perms="system:role:delete">
             <Popconfirm
               title={getIntlContent("SHENYU.COMMON.DELETE")}
-              placement='bottom'
+              placement="bottom"
               onConfirm={() => {
-                this.deleteClick()
+                this.deleteClick();
               }}
               okText={getIntlContent("SHENYU.COMMON.SURE")}
               cancelText={getIntlContent("SHENYU.COMMON.CALCEL")}
             >
-              <Button
-                style={{ marginLeft: 20 }}
-                type="danger"
-              >
+              <Button style={{ marginLeft: 20 }} type="danger">
                 {getIntlContent("SHENYU.SYSTEM.DELETEDATA")}
               </Button>
             </Popconfirm>
@@ -312,7 +312,7 @@ export default class Role extends Component {
             current: currentPage,
             pageSize,
             onShowSizeChange: this.onShowSizeChange,
-            onChange: this.pageOnchange
+            onChange: this.pageOnchange,
           }}
         />
         {popup}
